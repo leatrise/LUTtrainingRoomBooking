@@ -1,0 +1,1027 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+
+ 
+<meta name="renderer" content="webkit">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	<head>
+		<title>北京金盘精细化管理平台</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+		<!--meta info-->
+		<meta name="author" content="">
+		<meta name="keywords" content="">
+		<meta name="description" content="">
+		<link rel="icon" type="image/ico" href="assets/images/test/fav.ico">
+        
+		<!--stylesheet include-->
+		<link rel="stylesheet" type="text/css" media="all" href="assets/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" media="all" href="assets/css/jquery.custom-scrollbar.css">
+		<link rel="stylesheet" type="text/css" media="all" href="assets/css/owl.carousel.css">
+		<link rel="stylesheet" type="text/css" media="all" href="assets/css/style.css">
+		<link rel="stylesheet" href="css/alertify.core.css" id="toggleCSS" />
+        <link rel="stylesheet" href="css/alertify.bootstrap.css" id="toggleCSS" />
+		<!--font include-->
+		<link href="assets/css/font-awesome.min.css" rel="stylesheet">
+		
+        <!--scripts include-->
+		<script src="assets/js/jquery-3.4.1.min.js"></script>
+		<script src="assets/js/retina.js"></script>
+		<script src="assets/js/waypoints.min.js"></script>
+		<script src="assets/js/jquery.isotope.min.js"></script>
+		<script src="assets/js/jquery.tweet.min.js"></script>
+		<script src="assets/js/owl.carousel.min.js"></script>
+		<script src="assets/js/jquery.custom-scrollbar.js"></script>
+		<script src="assets/js/scripts.js"></script>
+		
+        <!-- 日历显示CSS -->
+	    <link href="css/calendarcss/dailog.css" rel="stylesheet" type="text/css" />
+	    <link href="css/calendarcss/calendar.css" rel="stylesheet" type="text/css" /> 
+	    <link href="css/calendarcss/dp.css" rel="stylesheet" type="text/css" />   
+	    <link href="css/calendarcss/alert.css" rel="stylesheet" type="text/css" /> 
+	    <link href="css/calendarcss/main.css" rel="stylesheet" type="text/css" />
+        <!-- 日历显示CSS结束 -->
+    
+        <!-- 日历显示JS -->
+	    <script src="js/Plugins/Common.js" type="text/javascript"></script>    
+	    <script src="js/Plugins/datepicker_lang_CN.js" type="text/javascript"></script>     
+	    <script src="js/Plugins/jquery.datepicker.js" type="text/javascript"></script>
+	    <script src="js/Plugins/jquery.alert.js" type="text/javascript"></script>    
+	    <script src="js/Plugins/jquery.ifrmdailog.js" defer type="text/javascript"></script>
+	    <script src="js/Plugins/wdCalendar_lang_CN.js" type="text/javascript"></script>    
+	    <script src="js/Plugins/jquery.calendar.js" type="text/javascript"></script>  
+        <!-- 日历显示JS结束 -->
+
+        <!-- trainingroom -->
+		<script type="text/javascript" src="js/global.js"></script>
+		<script type="text/javascript" src="js/alertify.min.js"></script>
+		<script type="text/javascript" src="js/jquery.blockUI.js"></script>
+		<script type="text/javascript" src="js/trainingroommanage.js"></script>
+		<!-- readingroom -->
+
+		<script type="text/javascript" src="js/readingroommanage.js"></script>
+		<script type="text/javascript" src="js/jquery.idTabs.min.js"></script>
+		<script type="text/javascript" src="js/trainingroomnote.js"></script>
+		<script type="text/javascript" src="js/image-slideshow.js"></script>
+		<script type="text/javascript" src="js/jquery-ui.js"></script>
+	</head>
+	<body>
+		<!--wide layout-->
+		<div class="boxed_layout relative w_xs_auto">
+		
+
+<header role="banner">
+  <!--header top part-->
+  <section class="h_top_part">
+    <div class="container">
+      <div class="row clearfix">
+        <div class="col-lg-12 col-md-4 col-sm-12 t_align_r t_xs_align_c">
+        
+
+        	<!-- <p class="f_size_small">你好，请&nbsp;<a href="#" data-popup="#login_popup">登录</a></p> -->
+        	<p class="f_size_small">你好，请&nbsp;<a href="/login" >登录</a>
+            
+
+        
+        </div>
+      </div>
+    </div>
+  </section>
+  <!--header bottom part-->
+  <section class="h_bot_part container">
+    <div class="clearfix row">
+      <div class="col-lg-6 col-md-6 col-sm-4 t_xs_align_c"> <a href="index.html" class="logo d_xs_inline_b"> <img src="images/logo.png" alt=""> </a> </div>
+      <!--<div class="col-lg-6 col-md-6 col-sm-8 t_align_r t_xs_align_c">
+        <ul class="d_inline_b horizontal_list clearfix t_align_l site_settings">
+          <li><a role="button" href="#" class="button_type_1 color_dark d_block bg_light_color_1 r_corners tr_delay_hover box_s_none"><i class="fa fa-comments f_size_ex_large"></i><span class="count circle t_align_c">12</span></a> </li>
+        </ul>
+      </div>-->
+    </div>
+  </section>
+  <!--main menu container-->
+  <section class="menu_wrap relative">
+    <div class="container clearfix">
+      <!--button for responsive menu-->
+      <button id="menu_button" class="r_corners centered_db d_none tr_all_hover d_xs_block m_bottom_10"> <span class="centered_db r_corners"></span> <span class="centered_db r_corners"></span> <span class="centered_db r_corners"></span> </button>
+      <!--main menu-->
+      <nav role="navigation" class="f_left f_xs_none d_xs_none">
+        <ul class="horizontal_list main_menu clearfix" id="topmnu">
+          <li class="current relative f_xs_none m_xs_bottom_5"><a href="index" class="tr_delay_hover color_light tt_uppercase"><b>首页</b></a></li>
+          <li class="relative f_xs_none m_xs_bottom_5"><a href="trainingroommanage" class="tr_delay_hover color_light tt_uppercase"><b>研讨间</b></a>
+            <!--sub menu-->
+            <div class="sub_menu_wrap top_arrow d_xs_none type_2 tr_all_hover clearfix r_corners">
+              <ul class="sub_menu">
+                <li><a class="color_dark tr_delay_hover" href="trainingroominfor">研讨间预约</a></li>
+                <li><a class="color_dark tr_delay_hover" href="javascript:checkuse();">研讨间续借</a></li>
+              </ul>
+            </div>
+          </li>
+          <li class="relative f_xs_none m_xs_bottom_5"><a href="readingroommanage" class="tr_delay_hover color_light tt_uppercase"><b>自习室</b></a>
+            <!--sub menu-->
+            <div class="sub_menu_wrap top_arrow d_xs_none type_2 tr_all_hover clearfix r_corners">
+              <ul class="sub_menu">
+                <li><a class="color_dark tr_delay_hover" href="selectreadingroom">座位预约</a></li>
+                <li><a class="color_dark tr_delay_hover" href="javascript:renewtable();">座位续借</a></li>
+                <!-- <li><a class="color_dark tr_delay_hover" href="javascript:opensignwindows();">预约签到</a></li>-->  
+
+                <!--<li><a class="color_dark tr_delay_hover" href="javascript:openWxrecommend();">扫码签到</a></li>-->  
+				<li><a class="color_dark tr_delay_hover" href="javascript:returntable();">座位签退</a></li>
+                <li><a class="color_dark tr_delay_hover" href="javascript:leavelinkclick();">暂离</a></li>
+                <li><a class="color_dark tr_delay_hover" href="javascript:leavein();">暂离归来</a></li>
+                <li><a class="color_dark tr_delay_hover" href="readingRoomFreeList">空闲自习室查询</a></li>
+              </ul>
+            </div>
+          </li>
+           <!-- <li class="relative f_xs_none m_xs_bottom_5"><a href="articleManager" class="tr_delay_hover color_light tt_uppercase"><b>物品预约</b></a></li>
+            <!--<li class="relative f_xs_none m_xs_bottom_5"><a href="/trainingroommanageisTable" class="tr_delay_hover color_light tt_uppercase"><b>座位预约</b></a>
+
+                <div class="sub_menu_wrap top_arrow d_xs_none type_2 tr_all_hover clearfix r_corners">
+                    <ul class="sub_menu">
+                        <li><a class="color_dark tr_delay_hover" href="/trainingroominforistable">座位预约</a></li>
+                      <li><a class="color_dark tr_delay_hover" href="javascript:checkUser();">预约签到</a></li>
+                        <li><a class="color_dark tr_delay_hover" href="javascript:checkuse();">座位续借</a></li>
+                    </ul>
+                </div>
+            </li>-->
+       <!--  <li class="relative f_xs_none m_xs_bottom_5"><a href="classroommain" class="tr_delay_hover color_light tt_uppercase"><b>公开课</b></a></li>-->
+
+         <!-- <li class="relative f_xs_none m_xs_bottom_5"><a href="event" class="tr_delay_hover color_light tt_uppercase"><b>活动</b></a>
+          </li>-->
+        <!--  <li class="relative f_xs_none m_xs_bottom_5"><a href="#" class="tr_delay_hover color_light tt_uppercase"><b>会议签到</b></a></li>-->
+
+          <li class="relative f_xs_none m_xs_bottom_5"><a href="usercenter" class="tr_delay_hover color_light tt_uppercase"><b>个人中心</b></a></li>
+        </ul>
+      </nav>
+      
+    </div>
+    <!--search form-->
+    
+  </section>
+</header>
+
+<!--login popup-->
+<div class="popup_wrap d_none" id="login_popup">
+  <section class="popup r_corners shadow">
+    <button class="bg_tr color_dark tr_all_hover text_cs_hover close f_size_large"><i class="fa fa-times"></i></button>
+    <h3 class="m_bottom_20 color_dark">登录</h3>
+    <form action="/login" method="POST" id="fromuser1">
+      <ul>
+        <li class="m_bottom_15">
+          <label for="username" class="m_bottom_5 d_inline_b">用户名</label>
+          <br>
+
+          <input type="text" name="user" id="user" class="r_corners full_width">
+        </li>
+        <li class="m_bottom_25">
+          <label for="password" class="m_bottom_5 d_inline_b">密　码</label>
+          <br>
+          <input type="password" name="passwd" id="passwd1" class="r_corners full_width">
+        </li>
+
+        <li class="clearfix m_bottom_30">
+          <button type="button" onclick="submitForm1();" class="button_type_4 tr_all_hover r_corners f_left bg_scheme_color color_light f_mxs_none m_mxs_bottom_15">登录</button>
+<!--           <div class="f_right f_size_medium f_mxs_none"> <a href="#" class="color_dark">忘记密码?</a> </div> -->
+        </li>
+      </ul>
+    </form>
+  </section>
+</div>
+<script src="http://res.wx.qq.com/open/js/jweixin-1.2.0.js" type="text/javascript"></script>
+<script type="text/javascript" src="js/trainingroommanage.js"></script>
+<!-- readingroom -->
+<script type="text/javascript" src="js/readingroommanage.js"></script>
+
+<script>
+
+  $(document).ready(function () {
+
+    var ua = navigator.userAgent.toLowerCase();
+    var isWeixin = ua.indexOf('micromessenger') != -1;
+    if (isWeixin) {
+
+    var clientUrl = window.location.href;
+    url = encodeURIComponent(clientUrl);
+    //console.log("url")
+    //console.log(url)
+
+    $.get('/wechat/jsApiConfig/workapiconfig?clientUrl=' + url, function (result) {
+ /*   $.get('/wechat/jsApiConfig?clientUrl=' + url, function (result) {*/
+      //为什么这么写 接口返回的不是标准的json
+      var config = eval(result);
+
+      wx.config({
+
+        debug: false,
+        appId: config.appId,
+        timestamp: config.timestamp,
+        nonceStr: config.nonceStr,
+        signature: config.signature,
+        jsApiList: [
+          'scanQRCode'
+        ]
+      });
+   
+    })
+
+
+  }else{
+    return false;
+  }})
+
+
+
+</script>
+<script type="text/javascript">
+	//初始化活动菜单
+	var trainingcheckurl="/trainingroominfor/checkisuse";
+	var trainingCheckUrlIsTable="/trainingroominfor/checkisUseIsTable";
+	var renewurl = "/readingroom/renewtable"; //续借提交地址
+	var returnurl = "/readingroom/returntable"; //座位签退
+	var beskdatasignurl = "/readingroom/beskdatasign"; //预约座位签到
+	var leavenoteurl = "/readingroom/leavenotelist"; //暂离原因列表
+	var leaveouturl = "/readingroom/leave"; //暂离操作URL
+	var leaveinurl ="/readingroom/leavein"; //暂离归来URL
+    var trainingCheckUrlIsTableOut = "/trainingroominfor/checkisUseOutIsTable";
+    var trainingRoomLeave = "/trainingroom/leave";
+    var trainingroomleaveback = "/trainingroom/leave/back";
+	//setActivityMenu("阅览室");
+</script>
+<div id="myModal" class="popup_wrap d_none">
+  <section class="popup r_corners shadow">
+    <button class="bg_tr color_dark tr_all_hover text_cs_hover close f_size_large"><i class="fa fa-times"></i></button>
+    <h3 class="m_bottom_20 color_dark">使用时间选择</h3>
+    <div class="clearfix">
+        <div class="custom_scrollbar"><div class="yanxius-time">
+          <div class="container-fluid jxh-item">
+            <div class="row" id="selectdate">
+              <div class="col-xs-4">
+                <div class="item-info">
+                  <div class="time-icon icon1">&nbsp;</div>
+                  <div class="jxh_content">
+                    <h3>研讨间A0001</h3>
+                    <p>上午：08:00-12:00</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-xs-4">
+                <div class="item-info">
+                  <div class="time-icon icon2">&nbsp;</div>
+                  <div class="jxh_content">
+                    <h3>研讨间A0001</h3>
+                    <p>下午：14:00-18:00</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+    </div>
+  </section>
+</div>
+
+
+<div id="UseDayModal" class="popup_wrap d_none">
+    <section class="popup r_corners shadow">
+        <button class="bg_tr color_dark tr_all_hover text_cs_hover close f_size_large"><i class="fa fa-times"></i></button>
+        <h3 class="m_bottom_20 color_dark">使用时间选择</h3>
+        <div class="clearfix">
+            <div class="custom_scrollbar"><div class="yanxius-time">
+                <div class="container-fluid jxh-item">
+                    <div class="row" id="usedayinfor">
+                        <div class="col-xs-4">
+                            <div class="item-info" onclick="selectusedaybuttonclick(day)">
+                                <div class="time-icon icon1">&nbsp;</div>
+                                <div class="jxh_content">
+                                    <p>上午：08:00-12:00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div></div>
+        </div>
+    </section>
+</div>
+
+<!--预约签到-->
+<div id="myQDModal" class="popup_wrap d_none">
+  <section class="popup r_corners shadow" style="overflow: auto; height: 80%">
+    <button class="bg_tr color_dark tr_all_hover text_cs_hover close f_size_large"><i class="fa fa-times"></i></button>
+    <h3 class="m_bottom_20 color_dark">预约签到</h3>
+      <!-- <ul>
+        <li class="m_bottom_15">
+          <label for="username" class="m_bottom_5 d_inline_b">请输入座位号码</label>
+          <br>
+          <input type="text" name="searchvalue" id="inputtableno" class="r_corners full_width">
+        </li>
+        <li class="clearfix m_bottom_30">
+          <button class="button_type_4 tr_all_hover r_corners f_left bg_scheme_color color_light f_mxs_none m_mxs_bottom_15" onclick="beskbuttonclick();">确认</button>
+        </li>
+      </ul> -->
+   	<input type="hidden" name="searchvalue" id="inputtableno">
+	<table class="table_type_6 responsive_table full_width t_align_l">
+ 			<thead>
+   			<tr>
+		      <th>座位号码</th>
+		      <th>使用日期</th>
+		      <th>使用时间</th>
+		      <th>提交时间</th>
+		      <th width="30%">阅览室</th>
+		      <th>操作</th>
+   			</tr>
+ 			</thead>
+ 			<tbody id="tbody">
+ 			</tbody>
+	</table>
+  </section>
+</div>
+
+<!--暂离-->
+<div id="leaveModal" class="popup_wrap d_none">
+  <section class="popup r_corners shadow">
+    <button class="bg_tr color_dark tr_all_hover text_cs_hover close f_size_large"><i class="fa fa-times"></i></button>
+    <h3 class="m_bottom_20 color_dark">选择暂离原因</h3>
+    <div class="yanxius-time">
+      <div class="container-fluid jxh-item">
+        <div class="row" id="levaenote">
+          <div class="col-xs-6">
+            <div class="item-info">
+              <div class="time-icon icon1">&nbsp;</div>
+              <div class="jxh_content">
+                <h3>研讨间A0001</h3>
+                <p>上午：08:00-12:00</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-xs-6">
+            <div class="item-info">
+              <div class="time-icon icon2">&nbsp;</div>
+              <div class="jxh_content">
+                <h3>研讨间A0001</h3>
+                <p>下午：14:00-18:00</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+
+
+<script type="text/javascript" src="js/login.js"></script>
+<script src="assets/js/base64.js"></script>
+<script type="text/javascript">
+		var ctx="";
+		function submitForm1(){
+			  var b = new Base64();
+			  $("#passwd1").val(b.encode($("#passwd1").val()));
+			  var form = document.getElementById('fromuser1');
+			form.submit();
+		  }
+</script>
+
+			<!--breadcrumbs-->
+			<section class="breadcrumbs">
+				<div class="container">
+					<ul class="horizontal_list clearfix bc_list f_size_medium">
+						<li class="m_right_10 current"><a href="#" class="default_t_color">首页<i class="fa fa-angle-right d_inline_middle m_left_10"></i></a></li>
+						<li><a href="#" class="default_t_color">研讨间预约</a></li>
+					</ul>
+				</div>
+			</section>
+			<!--content-->
+			<div class="page_content_offset">
+				<div class="container" id="mainpanle">
+					<div class="row clearfix">
+						<!--left content column-->
+						<section class="col-lg-9 col-md-9 col-sm-9">
+							<!-- 添加基本信息 -->
+                            
+							<div class="jp_tabs m_bottom_20">
+
+								<button class="tr_delay_hover r_corners button_type_12 bg_scheme_color color_light f_size_ex_large m_bottom_20" type="button" id="searchbtn" value="提交我的预约请求" onclick="mybeskinfor('100');">提交我的预约请求</button>
+								
+								<!--tabs navigation-->
+										<nav>
+										    <ul class="tabs_nav horizontal_list clearfix">
+												<li class="f_xs_none"><!--<a href="#tabi-1" class="bg_light_color_1 color_dark tr_delay_hover r_corners d_block">研讨间详细信息</a> --></li>
+											</ul>
+										</nav>
+                                                <!--tabs content-->
+										<section class="tabs_content shadow r_corners">
+											<div id="tabi-1"></div></section></div>
+                                        
+                                        
+                             
+							<div class="jp_tabs" id="yx-infoTab">
+										<!--tabs navigation-->
+										<nav>
+											<ul class="tabs_nav horizontal_list clearfix">
+												<li class="f_xs_none"><a href="#tab-1"
+													class="bg_light_color_1 color_dark tr_delay_hover r_corners d_block">当前预约情况</a></li>
+												<li class="f_xs_none"><a href="#tab-2"
+													class="bg_light_color_1 color_dark tr_delay_hover r_corners d_block">在馆位置</a></li>
+												<li class="f_xs_none"><a href="#tab-3"
+													class="bg_light_color_1 color_dark tr_delay_hover r_corners d_block">相册展示</a></li>
+												<li class="f_xs_none"><a href="#tab-4"
+													class="bg_light_color_1 color_dark tr_delay_hover r_corners d_block">预约信息</a></li>
+
+											</ul>
+										</nav>
+										<!--tabs content-->
+										<section class="tabs_content shadow r_corners">
+											<div id="tab-1">
+
+												<!-- 日历HTML元素加载开始 -->
+												<div>
+
+													<div id="calhead">
+
+														<div id="caltoolbar" class="ctoolbar">
+                                                          
+                                                             <div id="showdaybtn" class="fbutton fcurrent">
+																<div>
+																	<span title='Day' class="showdayview">日</span>
+																</div>
+															</div>
+															<div id="showweekbtn" class="fbutton">
+																<div>
+																	<span title='Week' class="showweekview">星期</span>
+																</div>
+															</div>
+														  
+															<div id="showmonthbtn" class="fbutton">
+																<div>
+																	<span title='Month' class="showmonthview">月</span>
+																</div>
+
+															</div>
+															<!--<div class="btnseparator"></div>-->
+															<div id="showreflashbtn" class="fbutton">
+																<div>
+																	<span title='Refresh view' class="showdayflash">刷新</span>
+																</div>
+															</div>
+															<!--<div class="btnseparator"></div>-->
+															<div id="sfprevbtn" title="Prev" class="fbutton">
+																<span class="fprev"></span>
+
+															</div>
+															<div id="sfnextbtn" title="Next" class="fbutton">
+																<span class="fnext"></span>
+															</div>
+															<div class="fshowdatep fbutton" >
+																<div>
+																	<input type="hidden" name="txtshow" id="hdtxtshow" />
+																	<span id="txtdatetimeshow">Loading</span>
+
+																</div>
+															</div>
+
+															<div id="loadingpannel" class="ptogtitle loadicon"
+																style="display: none;">数据加载中...</div>
+															<div id="errorpannel" class="ptogtitle loaderror"
+																style="display: none;">加载错误,请稍后重试...</div>
+
+															<div class="clear"></div>
+														</div>
+													</div>
+													<div class="calbody">
+
+														<div id="dvCalMain" class="calmain printborder">
+															<div id="gridcontainer" style="overflow-y: visible;">
+															</div>
+														</div>
+					
+													</div>
+
+												</div>
+												<!-- 日历HTML元素加载完毕 -->
+
+											</div>
+											<div id="tab-2">
+												<div class="DB_zgaddress">
+													<img src="images/img1.jpg"
+																width="100%" alt="" style="min-height:10px"/>
+
+													<div class="DB_thumSet1"></div>
+												</div>
+											</div>
+											<div id="tab-3">
+												<div id="DB_gallery">
+													<div class="DB_imgSet">
+														<div class="DB_imgWin">
+															<img src="images/img1.jpg" height="100%" width="110px" />
+														</div>
+														<div class="DB_page">
+															<span class="DB_current">0</span>-<span class="DB_total">0</span>
+														</div>
+														<div class="DB_prevBtn">
+															<img src="images/prev_off.png" alt="jquery相册" />
+														</div>
+														<div class="DB_nextBtn">
+															<img src="images/next_off.png" alt="图片相册" />
+														</div>
+													</div>
+
+													<div class="DB_thumSet">
+														<ul class="DB_thumMove">
+															
+
+																<li><a
+																	href="/imageFile/2018101913/20181019131754239.jpg"><img
+																		src="/imageFile/2018101913/small20181019131754239.jpg"
+																		alt="B708" /></a></li>
+															
+														</ul>
+
+														<div class="DB_thumLine"></div>
+														<div class="DB_prevPageBtn">
+															<img src="images/prev_page.png" alt="上一页" />
+														</div>
+														<div class="DB_nextPageBtn">
+															<img src="images/next_page.png" alt="下一页" />
+														</div>
+													</div>
+												</div>
+
+												<script type="text/javascript">
+													$('#DB_gallery')
+															.DB_gallery(
+																	{
+																		thumWidth : 110,
+																		thumGap : 8,
+																		thumMoveStep : 4,
+																		moveSpeed : 300,
+																		fadeSpeed : 500
+																	});
+												</script>
+											</div>
+										    <div id="tab-4">
+												<div>
+													<table width="100%" border="0" align="left" cellpadding="5"
+														cellspacing="5">
+														<tr align="right">
+															<td width="60"><button class="tr_delay_hover r_corners button_type_14 bg_dark_color bg_cs_hover color_light" type="button" id="searchbtn" value="提交我的预约请求" onclick="mybeskinfor('100');">提交我的预约请求</button></td>
+														</tr>
+													</table>
+												</div>
+												<table class="table_type_7 responsive_table full_width t_align_l">
+													<thead>
+														<tr>
+															<th>研讨间</th>
+															<th>使用日期</th>
+															<th>开始时间</th>
+															<th>结束日期</th>
+															<th>结束时间</th>
+															<th>提交时间</th>
+															<th>申请人</th>
+														</tr>
+													</thead>
+													<tbody>
+														
+															<tr>
+																<td data-title="研讨间">研讨室B708</td>
+																<td width="10%" data-title="使用日期">2025-12-12</td>
+																<td width="10%" data-title="开始时间">08:00:00</td>
+																<td width="10%" data-title="结束日期">12:00:00</td>
+																<td width="10%" data-title="结束时间">2025-12-12</td>
+																<td data-title="提交时间">2025-12-11 09:43:17.77</td>
+																<td data-title="申请人">232085801057</td>
+															</tr>
+														
+															<tr>
+																<td data-title="研讨间">研讨室B708</td>
+																<td width="10%" data-title="使用日期">2025-12-12</td>
+																<td width="10%" data-title="开始时间">13:00:00</td>
+																<td width="10%" data-title="结束日期">17:00:00</td>
+																<td width="10%" data-title="结束时间">2025-12-12</td>
+																<td data-title="提交时间">2025-12-11 09:49:41.617</td>
+																<td data-title="申请人">232085801057</td>
+															</tr>
+														
+															<tr>
+																<td data-title="研讨间">研讨室B708</td>
+																<td width="10%" data-title="使用日期">2025-12-12</td>
+																<td width="10%" data-title="开始时间">18:30:00</td>
+																<td width="10%" data-title="结束日期">21:30:00</td>
+																<td width="10%" data-title="结束时间">2025-12-12</td>
+																<td data-title="提交时间">2025-12-11 16:40:53.47</td>
+																<td data-title="申请人">252085701009</td>
+															</tr>
+														
+													</tbody>
+												</table>
+											</div>
+										</section>
+									</div>						
+
+						<!-- 基本信息添加结束 -->
+						</section>
+                        
+						<!--right column-->
+						<aside class="col-lg-3 col-md-3 col-sm-3">
+							<!--widgets-->
+							<figure class="widget shadow r_corners wrapper m_bottom_30">
+								<figcaption>
+									<h3 class="color_light">研讨间预约</h3>
+								</figcaption>
+								<div class="widget_content">
+									<!--Categories list-->
+									<ul class="categories_list" id="roommun">
+										<li class="active">
+											<a href="#" class="f_size_large scheme_color d_block relative">
+												<b>Women</b>
+												<span class="bg_light_color_1 r_corners f_right color_dark talign_c"></span>
+											</a>
+										
+										</li>
+										
+									</ul>
+								</div>
+			              </figure>
+							
+						</aside>
+					</div>
+				</div>
+				<div class="container" id="noticemsg">
+					<div class="m_bottom_45">
+						<blockquote class="r_corners shadow f_size_large relative m_bottom_30">  </blockquote>
+						<div class="d_inline_middle m_left_20">
+							<h5 class="color_dark"><b></b></h5>
+
+						</div>
+					</div>
+					<div class="m_right_5 m_sm_bottom_5">
+
+
+							<button class="tr_delay_hover r_corners button_type_12 bg_scheme_color color_light f_size_large" onclick="closenoteclick();">确认并继续</button>
+
+					</div>
+				</div>
+
+			</div>
+			<!--markup footer-->
+			<!--footer-->
+<footer id="footer">
+  <!--copyright part-->
+  <div class="footer_bottom_part">
+    <div class="container clearfix t_align_c">
+      <p class="f_mxs_none m_mxs_bottom_10">北京金盘鹏图软件技术有限公司     版本:1.1.2<br/>地址：北京市海淀区上地三街9号嘉华大厦A座1102&nbsp;&nbsp;邮编：100085<br/>电话：010-62979715/62979716/62980848/62988483 15321496978&nbsp;&nbsp;传真：010-62963987</p>      
+    </div>
+  </div>
+</footer>
+<!--Back to top-->
+<!--<button class="t_align_c r_corners type_2 tr_all_hover animate_ftl" id="go_to_top"><i class="fa fa-angle-up"></i></button>-->
+<!--social widgets-->
+<!--<ul class="social_widgets d_xs_none">
+  <!--contact form-->
+  <!--<li class="relative">
+    <button class="sw_button t_align_c contact"><i class="fa fa-apple"></i></button>
+    <div class="sw_content">
+      <h3 class="color_dark m_bottom_20">IOS下载</h3>
+      <ul class="c_info_list">
+        <li class="m_bottom_10">
+          <div class="rbtn rbtn-wx1"><img class="pic" src="images/Andrio.png"/></div>
+        </li>
+      </ul>
+    </div>
+  </li>-->
+  <!--contact info-->
+ <!-- <li class="relative">
+    <button class="sw_button t_align_c googlemap"><i class="fa fa-android"></i></button>
+    <div class="sw_content">
+      <h3 class="color_dark m_bottom_20"><a href="/interfacss/user/downloadPage">Android下载</a></h3>
+      <ul class="c_info_list">
+        <li class="m_bottom_10">
+          <div class="rbtn rbtn-wx1"><img class="pic" src="images/Andrio.png" onClick="window.location.href='/interfacss/user/downloadPage'"/></div>
+        </li>
+      </ul>
+    </div>
+  </li>-->
+  <!--facebook-->
+  <!--<li class="relative">
+    <button class="sw_button t_align_c facebook"><i class="fa fa-weixin"></i></button>
+    <div class="sw_content">
+      <h3 class="color_dark m_bottom_20">官方微信</h3>
+      <ul class="c_info_list">
+        <li class="m_bottom_10">
+          <div class="rbtn rbtn-wx1"><img class="pic" src="images/Andrio.png"/></div>
+        </li>
+      </ul>
+    </div>
+  </li>-->
+  <!--twitter feed-->
+  <!--<li class="relative">
+    <button class="sw_button t_align_c twitter"><i class="fa fa-weibo"></i></button>
+    <div class="sw_content">
+        <h3 class="color_dark m_bottom_20">官方微博</h3>
+        <ul class="c_info_list">
+          <li class="m_bottom_10">
+            <div class="rbtn rbtn-wx1"><img class="pic" src="images/Andrio.png"/></div>
+          </li>
+        </ul>
+    </div>
+  </li>
+</ul>-->
+
+		</div>
+<script type="text/javascript">
+	$(document).ready(function(){
+		$.ajax({
+			type: "GET",
+			url:'/getTrainingRoomPho1/100',
+			dataType: "text",
+		    success: function(base64Img){
+		    	$(".DB_zgaddress > img").attr('src', base64Img);
+			}
+		});
+	});
+</script>
+		
+	
+<script type="text/javascript">
+	  //初始化活动菜单
+	  setActivityMenu("研讨间");
+	   var roomdata = [{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"15","groupname":"彭家坪校区7楼研讨B区","imgUrl":"/imageFile/2018101913/small20181019131754239.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B708","roomno":100,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"15","groupname":"彭家坪校区7楼研讨B区","imgUrl":"/imageFile/2018101913/small201810191343312862.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B709","roomno":101,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"15","groupname":"彭家坪校区7楼研讨B区","imgUrl":"/imageFile/2018101913/small201810191326437050.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B710","roomno":102,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"15","groupname":"彭家坪校区7楼研讨B区","imgUrl":"/imageFile/2018101913/small201810191329324413.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B711","roomno":103,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":1,"groupid":"15","groupname":"彭家坪校区7楼研讨B区","imgUrl":"/imageFile/2018101913/small201810191335139266.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B712","roomno":104,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"17","groupname":"彭家坪校区7楼研讨A区","imgUrl":"/imageFile/2018101910/small201810191042132379.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A707","roomno":105,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"17","groupname":"彭家坪校区7楼研讨A区","imgUrl":"/imageFile/2018101910/small201810191043472977.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A708","roomno":106,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"17","groupname":"彭家坪校区7楼研讨A区","imgUrl":"/imageFile/2018101911/small201810191104086384.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A709","roomno":107,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"17","groupname":"彭家坪校区7楼研讨A区","imgUrl":"/imageFile/2018101913/small201810191312501678.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":0,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A710","roomno":108,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"17","groupname":"彭家坪校区7楼研讨A区","imgUrl":"/imageFile/2018101913/small201810191315165157.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A711","roomno":109,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"16","groupname":"彭家坪校区5楼研讨B区","imgUrl":"/imageFile/2018101816/small201810181651302455.jpg","isuse":0,"maxuser":"10","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B507","roomno":110,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"16","groupname":"彭家坪校区5楼研讨B区","imgUrl":"/imageFile/2018101816/small201810181652382661.jpg","isuse":0,"maxuser":"16","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B510","roomno":111,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"16","groupname":"彭家坪校区5楼研讨B区","imgUrl":"/imageFile/2018101816/small201810181654272372.jpg","isuse":0,"maxuser":"16","minuser":8,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B511","roomno":112,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"16","groupname":"彭家坪校区5楼研讨B区","imgUrl":"/imageFile/2018101816/small201810181656092689.jpg","isuse":0,"maxuser":"20","minuser":10,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室B512","roomno":113,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018111610/small201811161004058795.jpg","isuse":0,"maxuser":"6","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A507","roomno":114,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181401309139.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A508","roomno":115,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small20181018140401816.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A509","roomno":116,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181406398998.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A510","roomno":117,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181408195684.jpg","isuse":0,"maxuser":"6","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A511","roomno":118,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181412047243.jpg","isuse":0,"maxuser":"4","minuser":3,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A513","roomno":119,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181414355822.jpg","isuse":0,"maxuser":"4","minuser":3,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A514","roomno":120,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181421592303.jpg","isuse":0,"maxuser":"4","minuser":3,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A515","roomno":121,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181420429325.jpg","isuse":0,"maxuser":"4","minuser":3,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A516","roomno":122,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101814/small201810181425105162.jpg","isuse":0,"maxuser":"7","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A517","roomno":123,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101815/small201810181528076175.jpg","isuse":0,"maxuser":"7","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A518","roomno":124,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101815/small201810181534213757.jpg","isuse":0,"maxuser":"7","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A519","roomno":125,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101815/small201810181537308095.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A520","roomno":126,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101815/small201810181539372411.jpg","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A521","roomno":127,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101816/small201810181613519411.jpg","isuse":0,"maxuser":"6","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A522","roomno":128,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101816/small201810181616587433.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A523","roomno":129,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101816/small201810181619113634.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A524","roomno":130,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101816/small20181018162127276.jpg","isuse":0,"maxuser":"8","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A525","roomno":131,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"22:00:00","finishint":0,"groupid":"14","groupname":"彭家坪校区5楼研讨A区","imgUrl":"/imageFile/2018101816/small201810181624504249.jpg","isuse":0,"maxuser":"6","minuser":4,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室A526","roomno":132,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室107","roomno":133,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室108","roomno":134,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室109","roomno":135,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室110","roomno":136,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室111","roomno":137,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":1,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":1,"remintime":1,"roomType":0,"roomname":"研讨室112","roomno":138,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨区113","roomno":139,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室114","roomno":140,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室115","roomno":141,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室116","roomno":142,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室118","roomno":144,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"18","groupname":"兰工坪校区1楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室119","roomno":145,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室207","roomno":146,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"20","minuser":10,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室208","roomno":147,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室209","roomno":148,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"20","minuser":10,"mustusenote":0,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室210","roomno":149,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室212","roomno":151,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":1,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室213","roomno":152,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"14","minuser":7,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室214","roomno":153,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室215","roomno":154,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室216","roomno":155,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"19","groupname":"兰工坪校区2楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室217","roomno":156,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"20","groupname":"兰工坪校区3楼研讨区","isuse":0,"maxuser":"24","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室308","roomno":157,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"20","groupname":"兰工坪校区3楼研讨区","isuse":0,"maxuser":"10","minuser":5,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室315","roomno":158,"trainingDays":2},{"beskmaxtime":240,"beskmintime":60,"canusebegintime":"08:00:00","canuseendtime":"21:40:00","finishint":0,"groupid":"20","groupname":"兰工坪校区3楼研讨区","isuse":0,"maxuser":"12","minuser":6,"mustusenote":1,"remaxtime":60,"remintime":60,"roomType":0,"roomname":"研讨室316","roomno":159,"trainingDays":2}];
+	   var roomid = 100;
+
+	   setRoomInfor();
+	   function mybeskinfor(roomid)
+	 {
+		 window.location.href ="moretrainingroombesk?id=" + roomid;
+	 }
+</script>
+<script type="text/javascript">
+	//nameSpace
+	var VVG = {};
+	VVG.DOM = {};
+	//创建getElementsByClassName方法
+	VVG.DOM.getElementsByClassName = function(str, parent, tag) {
+		//父节点存在
+		if (parent) {
+			// 当父节点为string类型时，查找DOM节点，否则直接引用parent
+			parent = typeof parent == "string" ? document
+					.getElementById(parent) : parent;
+			// parent为空时提示错误信息
+			if (!parent)
+				alert("找不到标签，请检查参数是否正确");
+		} else {
+			// 未传值时，父节点为body
+			parent = document.body;
+		}
+		// tagContent为节点类型，未传值时为all节点
+		tag = tag || "*";
+		// 在父节点查找子节点，建立空数组arr
+		var els = parent.getElementsByTagName(tag), arr = [];
+		for (var i = 0, n = els.length; i < n; i++) {
+			// 查找每个节点下的classname，以空格分离为一个k数组
+			for (var j = 0, k = els[i].className.split(" "), l = k.length; j < 1; j++) {
+				// 当K数组中有一个值与str值相等时，记住这个标签并推入arr数组
+				if (k[j] == str) {
+					arr.push(els[i]);
+					break;
+				}
+			}
+		}
+		// 返回数组
+		return arr;
+	}	
+</script>
+<!-- 初始化日历 -->
+<script type="text/javascript">
+ var DATA_FEED_URL = "/datafeed";
+        $(document).ready(function() {
+
+           var view="week";
+            var op = {
+                view: view,
+                theme:6,
+                vstart:"9",
+                vend:"18",
+                showday: new Date(),
+                EditCmdhandler:Edit,
+                DeleteCmdhandler:Delete,
+                ViewCmdhandler:View,
+                onWeekOrMonthToDay:wtd,
+				roomType:0,
+                onBeforeRequestData: cal_beforerequest,
+                onAfterRequestData: cal_afterrequest,
+                onRequestDataError: cal_onerror,
+                autoload:true,
+                url: DATA_FEED_URL + "?method=list&id=" + roomid,
+                quickAddUrl: DATA_FEED_URL + "?method=add", 
+                quickUpdateUrl: DATA_FEED_URL + "?method=update",
+                quickDeleteUrl: DATA_FEED_URL + "?method=remove",
+                viewHand:true,  //取消头部
+                workBegin:"08",    //开始时间（输入整点部分）
+                workEnd:"22"      //结束时间(输入整点部分)        
+            };
+            var $dv = $("#calhead");
+            var _MH = document.documentElement.clientHeight;
+            var dvH = $dv.height() + 2;
+            op.height = _MH - dvH;
+            op.eventItems =[];
+
+            var p = $("#gridcontainer").bcalendar(op).BcalGetOp();
+           if (p && p.datestrshow) {
+                $("#txtdatetimeshow").text(p.datestrshow);
+            }
+            $("#caltoolbar div.fcurrent").each(function() {
+                $(this).removeClass("fcurrent");
+            })
+            $(this).addClass("fcurrent");
+            var p = $("#gridcontainer").swtichView("day").BcalGetOp();
+            if (p && p.datestrshow) {
+                $("#txtdatetimeshow").text(p.datestrshow);
+            }
+         
+         //   $("#caltoolbar").noSelect();
+            
+            $("#hdtxtshow").datepicker({ picker: "#txtdatetimeshow", showtarget: $("#txtdatetimeshow"),
+            onReturn:function(r){                          
+                            var p = $("#gridcontainer").gotoDate(r).BcalGetOp();
+                            if (p && p.datestrshow) {
+                                $("#txtdatetimeshow").text(p.datestrshow);
+                            }
+                     } 
+            });
+            function cal_beforerequest(type)
+            {
+                var t="Loading data...";
+                switch(type)
+                {
+                    case 1:
+                        t="Loading data...";
+                        break;
+                    case 2:                      
+                    case 3:  
+                    case 4:    
+                        t="The request is being processed ...";                                   
+                        break;
+                }
+                $("#errorpannel").hide();
+                $("#loadingpannel").html(t).show();    
+            }
+            function cal_afterrequest(type)
+            {
+                switch(type)
+                {
+                    case 1:
+                        $("#loadingpannel").hide();
+                        break;
+                    case 2:
+                    case 3:
+                    case 4:
+                        $("#loadingpannel").html("Success!");
+                        window.setTimeout(function(){ $("#loadingpannel").hide();},2000);
+                    break;
+                }              
+               
+            }
+            function cal_onerror(type,data)
+            {
+                $("#errorpannel").show();
+            }
+            function Edit(data)
+            {
+               var eurl="edit.php?id={0}&start={2}&end={3}&isallday={4}&title={1}";
+                if(data)
+                {
+                    var url = StrFormat(eurl,data);
+                    OpenModelWindow(url,{ width: 600, height: 400, caption:"Manage  The Calendar",onclose:function(){
+                       $("#gridcontainer").reload();
+                    }});
+                }
+            }
+            function View(data)
+            {
+                //显示详细信息
+               var str = "";
+                $.each(data, function(i, item){
+                    str += "[" + i + "]: " + item + "\n";
+                });
+                //alert(str);               
+            }    
+            function Delete(data,callback)
+            {           
+                
+                $.alerts.okButton="确定";  
+                $.alerts.cancelButton="取消";  
+                hiConfirm("确认要删除记录吗?", 'Confirm',function(r){ r && callback(0);});           
+            }
+            function wtd(p)
+            {
+               if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+                $("#caltoolbar div.fcurrent").each(function() {
+                    $(this).removeClass("fcurrent");
+                })
+                $("#showmonthbtn").addClass("fcurrent");
+            }
+            //to show day view
+            $("#showdaybtn").click(function(e) {
+                //document.location.href="#day";
+                $("#caltoolbar div.fcurrent").each(function() {
+                    $(this).removeClass("fcurrent");
+                })
+                $(this).addClass("fcurrent");
+                var p = $("#gridcontainer").swtichView("day").BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+            });
+            //to show week view
+            $("#showweekbtn").click(function(e) {
+                //document.location.href="#week";
+                $("#caltoolbar div.fcurrent").each(function() {
+                    $(this).removeClass("fcurrent");
+                })
+                $(this).addClass("fcurrent");
+                var p = $("#gridcontainer").swtichView("week").BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+
+            });
+            //to show month view
+            $("#showmonthbtn").click(function(e) {
+                //document.location.href="#month";
+                $("#caltoolbar div.fcurrent").each(function() {
+                    $(this).removeClass("fcurrent");
+                })
+                $(this).addClass("fcurrent");
+                var p = $("#gridcontainer").swtichView("month").BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+            });
+            
+            $("#showreflashbtn").click(function(e){
+                $("#gridcontainer").reload();
+            });
+            
+            //Add a new event
+            $("#faddbtn").click(function(e) {
+                var url ="edit.php";
+                OpenModelWindow(url,{ width: 500, height: 400, caption: "Create New Calendar"});
+            });
+            //go to today
+            $("#showtodaybtn").click(function(e) {
+                var p = $("#gridcontainer").gotoDate().BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+
+
+            });
+            //previous date range
+            $("#sfprevbtn").click(function(e) {
+                var p = $("#gridcontainer").previousRange().BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+
+            });
+            //next date range
+            $("#sfnextbtn").click(function(e) {
+                var p = $("#gridcontainer").nextRange().BcalGetOp();
+                if (p && p.datestrshow) {
+                    $("#txtdatetimeshow").text(p.datestrshow);
+                }
+            });
+            
+        });
+</script>
+	<input type="hidden" value="0" id="usetrainingroomnotice">
+	<input type="hidden" value="" id="trainingroomnoticetitle">
+	<input type="hidden" value="" id="trainingroomnoticenotice">
+
+	<script type="text/javascript">
+
+		if ($("#usetrainingroomnotice").val() == 1)
+		{
+			$("#mainpanle").hide();
+			$("#noticemsg").show();
+		}else
+		{
+			$("#mainpanle").show();
+			$("#noticemsg").hide();
+		}
+		//关闭信息提示
+		var closenoteclick = function ()
+		{
+			$("#mainpanle").show();
+			$("#noticemsg").hide();
+		}
+	</script>
+	</body>
+</html>
+
