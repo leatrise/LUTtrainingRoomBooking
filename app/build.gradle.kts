@@ -6,6 +6,20 @@ plugins {
     id("com.google.devtools.ksp") version "2.0.21-1.0.25"
 }
 
+val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+val ciVersionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+val releaseKeystoreType = System.getenv("ANDROID_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+    ?: releaseKeystorePassword
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias
+).all { it != null }
+
 android {
     namespace = "com.trainingroom.book"
     compileSdk {
@@ -16,19 +30,36 @@ android {
         applicationId = "com.trainingroom.book"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storeType = releaseKeystoreType
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Enable R8/Proguard for smaller, more optimized release builds.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
