@@ -62,7 +62,9 @@ jobs:
 
     - name: Build release APK
       env:
-        ANDROID_KEYSTORE_PATH: app/release.p12
+        # app/build.gradle.kts uses `file(...)` relative to the :app module dir,
+        # so the path must be relative to `app/` rather than repo root.
+        ANDROID_KEYSTORE_PATH: release.p12
         ANDROID_KEYSTORE_TYPE: PKCS12
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
