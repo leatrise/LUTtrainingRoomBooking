@@ -7,7 +7,6 @@ plugins {
 }
 
 val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
-val ciVersionName = System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
 val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
 val releaseKeystoreType = System.getenv("ANDROID_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
 val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
@@ -31,7 +30,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = ciVersionCode ?: 1
-        versionName = ciVersionName ?: "1.0"
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

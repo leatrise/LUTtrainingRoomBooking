@@ -51,9 +51,13 @@ jobs:
     - name: Detect version
       id: detect_version
       run: |
-        SHORT_SHA=$(git rev-parse --short=8 HEAD)
-        VERSION_NAME="${SHORT_SHA}"
-        VERSION_CODE=$(git show -s --format=%ct HEAD)
+        # versionName is defined in app/build.gradle.kts; CI only injects versionCode.
+        VERSION_CODE=$(git rev-list --count HEAD)
+        VERSION_NAME=$(grep -m1 'versionName = "' app/build.gradle.kts | sed -E 's/.*versionName = "([^"]+)".*/\1/')
+        if [ -z "$VERSION_NAME" ]; then
+          echo "Failed to detect versionName from app/build.gradle.kts"
+          exit 1
+        fi
         APP_NAME=$(grep -m1 'name="app_name"' app/src/main/res/values/strings.xml | sed -E 's/.*>([^<]+)<.*/\1/' | tr ' ' '_')
         ARTIFACT_BASE="${APP_NAME}-${VERSION_NAME}"
         echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
@@ -69,7 +73,6 @@ jobs:
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         VERSION_CODE: ${{ steps.detect_version.outputs.version_code }}
-        VERSION_NAME: ${{ steps.detect_version.outputs.version_name }}
       run: ./gradlew assembleRelease
 
     - name: Upload release APK artifact
