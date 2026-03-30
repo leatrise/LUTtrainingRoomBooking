@@ -49,6 +49,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +111,7 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -378,6 +380,48 @@ private fun loadRoomCacheTimestamp(context: Context): String? {
     }
 }
 
+private fun loadReservationsCacheTimestamp(context: Context): String? {
+    return try {
+        val meta = File(context.filesDir, "reservations_cache_meta.txt")
+        if (meta.exists()) meta.readText() else null
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private fun formatCacheTimestamp(raw: String?): String? {
+    val millis = raw?.trim()?.toLongOrNull() ?: return null
+    return runCatching {
+        Instant.ofEpochMilli(millis)
+            .atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("M/d HH:mm", Locale.getDefault()))
+    }.getOrNull()
+}
+
+private const val CACHE_MAX_AGE_MILLIS = 24 * 60 * 60 * 1000L
+
+private fun isCacheExpired(raw: String?, nowMillis: Long = System.currentTimeMillis()): Boolean {
+    val savedAt = raw?.trim()?.toLongOrNull() ?: return true
+    return nowMillis - savedAt > CACHE_MAX_AGE_MILLIS
+}
+
+private fun buildReservationsCacheStatus(
+    prefix: String,
+    count: Int,
+    cacheTimeText: String?
+): String {
+    return buildString {
+        append(prefix)
+        append('·')
+        append(count)
+        append("个")
+        cacheTimeText?.let {
+            append('·')
+            append(it)
+        }
+    }
+}
+
 private suspend fun saveReservationsCache(
     context: Context,
     data: Map<String, List<ReservationItem>>
@@ -409,6 +453,10 @@ private suspend fun saveReservationsCache(
 private suspend fun loadReservationsCache(context: Context): Map<String, List<ReservationItem>> {
     return withContext(Dispatchers.IO) {
         try {
+            if (isCacheExpired(loadReservationsCacheTimestamp(context))) {
+                Log.w("MainActivity", "预约缓存已超过24小时，自动丢弃")
+                return@withContext emptyMap()
+            }
             val file = File(context.filesDir, "reservations_cache.json")
             if (!file.exists()) return@withContext emptyMap()
             val json = file.readText()
@@ -804,6 +852,7 @@ class SearchAvailabilityState {
     var ongoing by mutableIntStateOf(0)
     var isFetchingRooms by mutableStateOf(false)
     var statusText by mutableStateOf("等待获取所有研讨室结果（0/0）")
+    var reservationsCacheTimeText by mutableStateOf<String?>(null)
     val reservationResults = mutableStateMapOf<String, List<ReservationItem>>()
     var hasLoadedCache by mutableStateOf(false)
     var availableRooms by mutableStateOf<List<ConferenceRoom>>(emptyList())
@@ -832,6 +881,8 @@ fun SearchAvailabilityScreen(
     var ongoing by state::ongoing
     var isFetchingRooms by state::isFetchingRooms
     var statusText by state::statusText
+    var reservationsCacheTimeText by state::reservationsCacheTimeText
+    var showRefreshConfirm by remember { mutableStateOf(false) }
     val reservationResults = state.reservationResults
     var hasLoadedCache by state::hasLoadedCache
     var availableRooms by state::availableRooms
@@ -901,6 +952,7 @@ fun SearchAvailabilityScreen(
             state.ongoing = ongoing
             state.isFetchingRooms = isFetchingRooms
             state.statusText = statusText
+            state.reservationsCacheTimeText = reservationsCacheTimeText
             state.hasLoadedCache = hasLoadedCache
             state.availableRooms = availableRooms
             state.resultMessage = resultMessage
@@ -909,6 +961,12 @@ fun SearchAvailabilityScreen(
 
         if (!hasLoadedCache) {
             val cached = loadReservationsCache(context)
+            val rawCacheTimestamp = loadReservationsCacheTimestamp(context)
+            reservationsCacheTimeText = if (isCacheExpired(rawCacheTimestamp)) {
+                null
+            } else {
+                formatCacheTimestamp(rawCacheTimestamp)
+            }
             val validIds = rooms.map { it.id }.toSet()
             cached.forEach { (roomId, list) ->
                 if (roomId in validIds) {
@@ -917,7 +975,11 @@ fun SearchAvailabilityScreen(
             }
             ongoing = reservationResults.size
             statusText = if (reservationResults.isNotEmpty()) {
-                "已加载缓存（${reservationResults.size}/${state.totalRooms}）"
+                buildReservationsCacheStatus(
+                    prefix = "已加载缓存",
+                    count = reservationResults.size,
+                    cacheTimeText = reservationsCacheTimeText
+                )
             } else {
                 "等待获取所有研讨室结果（0/${state.totalRooms}）"
             }
@@ -932,7 +994,11 @@ fun SearchAvailabilityScreen(
             ongoing = reservationResults.size
             if (!isFetchingRooms) {
                 statusText = if (reservationResults.isNotEmpty()) {
-                    "已缓存 ${reservationResults.size}/${state.totalRooms}"
+                    buildReservationsCacheStatus(
+                        prefix = "已加载缓存",
+                        count = reservationResults.size,
+                        cacheTimeText = reservationsCacheTimeText
+                    )
                 } else {
                     "等待获取所有研讨室结果（0/${state.totalRooms}）"
                 }
@@ -946,6 +1012,7 @@ fun SearchAvailabilityScreen(
         state.ongoing = ongoing
         state.isFetchingRooms = isFetchingRooms
         state.statusText = statusText
+        state.reservationsCacheTimeText = reservationsCacheTimeText
         state.hasLoadedCache = hasLoadedCache
         state.availableRooms = availableRooms
         state.resultMessage = resultMessage
@@ -1018,8 +1085,13 @@ fun SearchAvailabilityScreen(
                     ongoing = idx + 1
                     statusText = "获取中（${ongoing}/${state.totalRooms}）"
                 }
-                statusText = "获取完成（${ongoing}/${state.totalRooms}）"
                 saveReservationsCache(context, reservationResults.toMap())
+                reservationsCacheTimeText = formatCacheTimestamp(loadReservationsCacheTimestamp(context))
+                statusText = buildReservationsCacheStatus(
+                    prefix = "已加载缓存",
+                    count = reservationResults.size,
+                    cacheTimeText = reservationsCacheTimeText
+                )
                 afterFetch?.invoke()
             } catch (e: CancellationException) {
                 statusText = "获取已取消（${ongoing}/${state.totalRooms}）"
@@ -1028,6 +1100,29 @@ fun SearchAvailabilityScreen(
                 isFetchingRooms = false
             }
         }
+    }
+
+    if (showRefreshConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRefreshConfirm = false },
+            title = { Text("确认刷新缓存") },
+            text = { Text("刷新后会重新获取所有研讨室预约数据，是否继续？") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRefreshConfirm = false
+                        refreshReservations(null)
+                    }
+                ) {
+                    Text("继续刷新")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showRefreshConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 
     Column(
@@ -1304,7 +1399,11 @@ fun SearchAvailabilityScreen(
                             indication = null
                         ) {
                             if (isFetchingRooms) return@clickable
-                            refreshReservations(null)
+                            if (reservationResults.isNotEmpty()) {
+                                showRefreshConfirm = true
+                            } else {
+                                refreshReservations(null)
+                            }
                         }
                 )
             }
@@ -1674,7 +1773,8 @@ fun SearchAvailabilityScreenPreview() {
         totalRooms = previewRooms.size
         ongoing = previewRooms.size
         isFetchingRooms = false
-        statusText = "已缓存 ${previewRooms.size}/${previewRooms.size}"
+        statusText = "已加载缓存·${previewRooms.size}个·3/30 19:20"
+        reservationsCacheTimeText = "3/30 19:20"
         hasLoadedCache = true
         availableRooms = previewRooms.take(2)
         transitPlans = listOf(
