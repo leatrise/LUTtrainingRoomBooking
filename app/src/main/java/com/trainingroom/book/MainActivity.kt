@@ -49,6 +49,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,8 +58,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -77,7 +81,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -114,7 +117,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                HomeScreen()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    HomeScreen()
+                }
             }
         }
     }
@@ -586,14 +594,21 @@ fun HomeScreen() {
             context.startActivity(intent)
         }
     }
+    val topBarTitle = when (selectedNavItem) {
+        0 -> "研讨室预约系统"
+        1 -> "空闲研讨室搜索"
+        2 -> "我的预约"
+        else -> "个人中心"
+    }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "研讨室预约系统",
-                        fontSize = 20.sp,
+                        text = topBarTitle,
+                        fontSize = 22.sp,
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -617,9 +632,9 @@ fun HomeScreen() {
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
         },
@@ -640,25 +655,34 @@ fun HomeScreen() {
             when (selectedNavItem) {
                 0 -> {
                     if (offlineNotice != null) {
-                        Row(
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
                                 .clickable(enabled = !isRefreshing) { onRefresh() },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = offlineNotice,
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
                             )
-                            if (isRefreshing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = offlineNotice,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontSize = 12.sp
                                 )
+                                if (isRefreshing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
                             }
                         }
                     }
@@ -671,7 +695,23 @@ fun HomeScreen() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if (isGridView) {
+                    if (conferenceRooms.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator()
+                                Text(
+                                    text = if (isRefreshing) "正在加载研讨室列表" else "暂无研讨室数据",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else if (isGridView) {
                         ConferenceRoomGrid(rooms = filteredRooms, onRoomSelected = openRoomDetail)
                     } else {
                         ConferenceRoomList(rooms = filteredRooms, onRoomSelected = openRoomDetail)
@@ -707,7 +747,7 @@ fun CategoryTabs(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         categories.forEachIndexed { index, category ->
@@ -726,39 +766,29 @@ fun CategoryTab(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .background(
-                color = if (isSelected)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(20.dp)
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 8.dp else 2.dp
-        )
-    ) {
-        Box(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
+    FilterChip(
+        selected = isSelected,
+        onClick = onClick,
+        label = {
             Text(
                 text = text,
-                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                 fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
             )
-        }
-    }
+        },
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = isSelected,
+            borderColor = MaterialTheme.colorScheme.outlineVariant,
+            selectedBorderColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    )
 }
 
 class SearchAvailabilityState {
@@ -1007,237 +1037,278 @@ fun SearchAvailabilityScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "空闲研讨室搜索",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Text(
-            text = "请选择日期和时间段，后续用于查询该时间段的可预约房间。",
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        val dateInteractionSource = remember { MutableInteractionSource() }
-        OutlinedTextField(
-            value = dateText,
-            onValueChange = { input ->
-                dateText = input
-                runCatching { LocalDate.parse(input, dateFormatter) }
-                    .onSuccess { selectedDate = it }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = dateInteractionSource,
-                    indication = null
-                ) { openDatePicker() },
-            label = { Text("日期") },
-            placeholder = { Text("选择日期") },
-            trailingIcon = {
-                IconButton(onClick = { openDatePicker() }) {
-                    Icon(Icons.Filled.CalendarMonth, contentDescription = "选择日期")
-                }
-            }
-        )
-
-        Row(
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            val startInteractionSource = remember { MutableInteractionSource() }
-            val endInteractionSource = remember { MutableInteractionSource() }
-            OutlinedTextField(
-                value = startTimeText,
-                onValueChange = { input ->
-                    startTimeText = input
-                    runCatching { LocalTime.parse(input, timeFormatter) }
-                        .onSuccess { startTime = it }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = startInteractionSource,
-                        indication = null
-                    ) { openStartTimePicker() },
-                label = { Text("开始时间") },
-                placeholder = { Text("如 09:00") },
-                trailingIcon = {
-                    IconButton(onClick = { openStartTimePicker() }) {
-                        Icon(Icons.Filled.AccessTime, contentDescription = "选择开始时间")
-                    }
-                }
-            )
-            OutlinedTextField(
-                value = endTimeText,
-                onValueChange = { input ->
-                    endTimeText = input
-                    runCatching { LocalTime.parse(input, timeFormatter) }
-                        .onSuccess { endTime = it }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = endInteractionSource,
-                        indication = null
-                    ) { openEndTimePicker() },
-                label = { Text("结束时间") },
-                placeholder = { Text("如 11:00") },
-                trailingIcon = {
-                    IconButton(onClick = { openEndTimePicker() }) {
-                        Icon(Icons.Filled.AccessTime, contentDescription = "选择结束时间")
-                    }
-                }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ExposedDropdownMenuBox(
-                expanded = campusExpanded,
-                onExpandedChange = { campusExpanded = !campusExpanded },
-                modifier = Modifier.width(140.dp)
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                OutlinedTextField(
-                    value = selectedCampus,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("校区") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = campusExpanded)
-                    },
-                    colors = ExposedDropdownMenuDefaults.textFieldColors(),
-                    modifier = Modifier.menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded = campusExpanded,
-                    onDismissRequest = { campusExpanded = false }
-                ) {
-                    campusOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                selectedCampus = option
-                                campusExpanded = false
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "查询条件",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "请选择日期和时间段，一键查询该时间段的空闲房间",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val dateInteractionSource = remember { MutableInteractionSource() }
+                    OutlinedTextField(
+                        value = dateText,
+                        onValueChange = { input ->
+                            dateText = input
+                            runCatching { LocalDate.parse(input, dateFormatter) }
+                                .onSuccess { selectedDate = it }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = dateInteractionSource,
+                                indication = null
+                            ) { openDatePicker() },
+                        label = { Text("日期") },
+                        placeholder = { Text("选择日期") },
+                        trailingIcon = {
+                            IconButton(onClick = { openDatePicker() }) {
+                                Icon(Icons.Filled.CalendarMonth, contentDescription = "选择日期")
+                            }
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val startInteractionSource = remember { MutableInteractionSource() }
+                        val endInteractionSource = remember { MutableInteractionSource() }
+                        OutlinedTextField(
+                            value = startTimeText,
+                            onValueChange = { input ->
+                                startTimeText = input
+                                runCatching { LocalTime.parse(input, timeFormatter) }
+                                    .onSuccess { startTime = it }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = startInteractionSource,
+                                    indication = null
+                                ) { openStartTimePicker() },
+                            label = { Text("开始时间") },
+                            placeholder = { Text("如 09:00") },
+                            trailingIcon = {
+                                IconButton(onClick = { openStartTimePicker() }) {
+                                    Icon(Icons.Filled.AccessTime, contentDescription = "选择开始时间")
+                                }
+                            }
+                        )
+                        OutlinedTextField(
+                            value = endTimeText,
+                            onValueChange = { input ->
+                                endTimeText = input
+                                runCatching { LocalTime.parse(input, timeFormatter) }
+                                    .onSuccess { endTime = it }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = endInteractionSource,
+                                    indication = null
+                                ) { openEndTimePicker() },
+                            label = { Text("结束时间") },
+                            placeholder = { Text("如 11:00") },
+                            trailingIcon = {
+                                IconButton(onClick = { openEndTimePicker() }) {
+                                    Icon(Icons.Filled.AccessTime, contentDescription = "选择结束时间")
+                                }
                             }
                         )
                     }
-                }
-            }
 
-            OutlinedTextField(
-                value = filterText,
-                onValueChange = { filterText = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("筛选条件") },
-                placeholder = { Text("可输入关键字或楼层") }
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
-                Text("是否启用中转方案", fontSize = 12.sp)
-            }
-        }
-
-        Button(
-            onClick = {
-                if (reservationResults.isEmpty() && !isFetchingRooms && state.totalRooms > 0) {
-                    refreshReservations(runQuery)
-                } else {
-                    runQuery()
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("查询空闲研讨室")
-        }
-
-        if (availableRooms.isEmpty()) {
-            Text(resultMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            Text(resultMessage, color = MaterialTheme.colorScheme.primary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                availableRooms.forEach { room ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(onClick = { onRoomSelected(room) })
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(room.name, fontWeight = FontWeight.SemiBold)
-                            Icon(
-                                imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = "跳转详情",
-                                modifier = Modifier.rotate(180f),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            ExposedDropdownMenuBox(
+                                expanded = campusExpanded,
+                                onExpandedChange = { campusExpanded = !campusExpanded },
+                                modifier = Modifier.width(150.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedCampus,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("校区") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = campusExpanded)
+                                    },
+                                    modifier = Modifier.menuAnchor()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = campusExpanded,
+                                    onDismissRequest = { campusExpanded = false }
+                                ) {
+                                    campusOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                selectedCampus = option
+                                                campusExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = filterText,
+                                onValueChange = { filterText = it },
+                                modifier = Modifier.weight(1f),
+                                label = { Text("筛选条件") },
+                                placeholder = { Text("可输入关键字或楼层") }
                             )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
+                            Text("是否启用中转方案", fontSize = 12.sp)
                         }
                     }
                 }
-            }
-        }
 
-        if (enableTransit && transitPlans.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("中转方案", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                transitPlans.forEach { plan ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("${plan.first.name} -> ${plan.second.name}", fontWeight = FontWeight.SemiBold)
-                            Text(
-                                text = "中转时间：${plan.split.toLocalTime().format(timeFormatter)}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "校区：${plan.first.campus()}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                Button(
+                    onClick = {
+                        if (reservationResults.isEmpty() && !isFetchingRooms && state.totalRooms > 0) {
+                            refreshReservations(runQuery)
+                        } else {
+                            runQuery()
                         }
-                    }
-                }
-            }
-        }
-
-        val statusInteractionSource = remember { MutableInteractionSource() }
-        Text(
-            text = statusText,
-            color = if (isFetchingRooms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    enabled = state.totalRooms > 0,
-                    interactionSource = statusInteractionSource,
-                    indication = null
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    if (isFetchingRooms) return@clickable
-                    refreshReservations(null)
+                    Text("查询空闲研讨室")
                 }
-        )
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "查询结果",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (availableRooms.isEmpty()) {
+                    Text(resultMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(resultMessage, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        availableRooms.forEach { room ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(onClick = { onRoomSelected(room) }),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(room.name, fontWeight = FontWeight.SemiBold)
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowBack,
+                                        contentDescription = "跳转详情",
+                                        modifier = Modifier.rotate(180f),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (enableTransit && transitPlans.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("中转方案", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        transitPlans.forEach { plan ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp)),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("${plan.first.name} -> ${plan.second.name}", fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        text = "中转时间：${plan.split.toLocalTime().format(timeFormatter)}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "校区：${plan.first.campus()}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val statusInteractionSource = remember { MutableInteractionSource() }
+                Text(
+                    text = statusText,
+                    color = if (isFetchingRooms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            enabled = state.totalRooms > 0,
+                            interactionSource = statusInteractionSource,
+                            indication = null
+                        ) {
+                            if (isFetchingRooms) return@clickable
+                            refreshReservations(null)
+                        }
+                )
+            }
+        }
     }
 }
 
@@ -1278,12 +1349,12 @@ fun ConferenceRoomCard(room: ConferenceRoom, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 4.dp
+            defaultElevation = 2.dp
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -1351,11 +1422,7 @@ fun ConferenceRoomCard(room: ConferenceRoom, onClick: () -> Unit) {
                     )
                 }
 
-                Text(
-                    text = "状态: ${room.status}",
-                    fontSize = 11.sp,
-                    color = if (room.inUse) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)
-                )
+                RoomStatusBadge(room = room)
             }
         }
     }
@@ -1369,12 +1436,12 @@ fun ConferenceRoomListItem(room: ConferenceRoom, onClick: () -> Unit) {
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 4.dp
+            defaultElevation = 2.dp
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -1434,12 +1501,35 @@ fun ConferenceRoomListItem(room: ConferenceRoom, onClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            Text(
-                text = "状态: ${room.status}",
-                fontSize = 11.sp,
-                color = if (room.inUse) MaterialTheme.colorScheme.error else Color(0xFF2E7D32)
-            )
+            RoomStatusBadge(room = room)
         }
+    }
+}
+
+@Composable
+fun RoomStatusBadge(room: ConferenceRoom) {
+    val containerColor = if (room.inUse) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val contentColor = if (room.inUse) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = RoundedCornerShape(999.dp)
+    ) {
+        Text(
+            text = room.status,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -1467,13 +1557,20 @@ fun BottomNavigationBar(
     onItemSelected: (Int) -> Unit
 ) {
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Home, contentDescription = "首页") },
             label = { Text("首页") },
             selected = selectedItem == 0,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             onClick = { onItemSelected(0) }
         )
         NavigationBarItem(
@@ -1481,18 +1578,39 @@ fun BottomNavigationBar(
 
             label = { Text("搜索") },
             selected = selectedItem == 1,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             onClick = { onItemSelected(1) }
         )
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Info, contentDescription = "预约") },
             label = { Text("我的预约") },
             selected = selectedItem == 2,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             onClick = { onItemSelected(2) }
         )
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Person, contentDescription = "个人中心") },
             label = { Text("个人中心") },
             selected = selectedItem == 3,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            ),
             onClick = { onItemSelected(3) }
         )
     }
@@ -1503,10 +1621,90 @@ private fun nearestWholeHour(time: LocalTime): LocalTime {
     return if (time.minute >= 30) baseHour.plusHours(1) else baseHour
 }
 
-@Preview(showBackground = true)
+//@Preview(showBackground = true)
+//@Composable
+//fun HomeScreenPreview() {
+//    MyApplicationTheme {
+//        HomeScreen()
+//    }
+//}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 900)
 @Composable
-fun HomeScreenPreview() {
+fun SearchAvailabilityScreenPreview() {
+    val previewRooms = listOf(
+        ConferenceRoom(
+            id = "105",
+            name = "研讨室 A707",
+            minCapacity = 6,
+            maxCapacity = 12,
+            location = "彭家坪校区 7 楼研讨 A 区",
+            floor = "7F",
+            inUse = false,
+            status = "空闲"
+        ),
+        ConferenceRoom(
+            id = "146",
+            name = "研讨室 207",
+            minCapacity = 6,
+            maxCapacity = 12,
+            location = "兰工坪校区 2 楼研讨区",
+            floor = "2F",
+            inUse = false,
+            status = "空闲"
+        ),
+        ConferenceRoom(
+            id = "157",
+            name = "研讨室 308",
+            minCapacity = 6,
+            maxCapacity = 24,
+            location = "兰工坪校区 3 楼研讨区",
+            floor = "3F",
+            inUse = true,
+            status = "使用中"
+        )
+    )
+    val previewState = remember { SearchAvailabilityState() }.apply {
+        selectedDate = LocalDate.of(2026, 3, 30)
+        startTime = LocalTime.of(9, 0)
+        endTime = LocalTime.of(11, 0)
+        selectedCampus = "全部"
+        filterText = "A7"
+        enableTransit = true
+        totalRooms = previewRooms.size
+        ongoing = previewRooms.size
+        isFetchingRooms = false
+        statusText = "已缓存 ${previewRooms.size}/${previewRooms.size}"
+        hasLoadedCache = true
+        availableRooms = previewRooms.take(2)
+        transitPlans = listOf(
+            TransitPlan(
+                first = previewRooms[0],
+                second = previewRooms[1],
+                split = LocalDateTime.of(2026, 3, 30, 10, 0)
+            )
+        )
+        resultMessage = "空闲房间 2/${previewRooms.size}，可用中转方案 1 条"
+        reservationResults.clear()
+        reservationResults[previewRooms[0].id] = listOf(
+            ReservationItem("30001", "预约记录", "03/30/2026 13:00", "03/30/2026 15:00")
+        )
+        reservationResults[previewRooms[1].id] = emptyList()
+        reservationResults[previewRooms[2].id] = listOf(
+            ReservationItem("30002", "预约记录", "03/30/2026 09:00", "03/30/2026 10:00")
+        )
+    }
+
     MyApplicationTheme {
-        HomeScreen()
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            SearchAvailabilityScreen(
+                rooms = previewRooms,
+                state = previewState,
+                onRoomSelected = {}
+            )
+        }
     }
 }

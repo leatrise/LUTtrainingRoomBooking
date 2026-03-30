@@ -17,11 +17,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,7 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trainingroom.book.ui.theme.MyApplicationTheme
@@ -50,7 +59,16 @@ class RoomDetailActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                RoomDetailScreen(room = room, offlineNotice = offlineNotice)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    RoomDetailScreen(
+                        room = room,
+                        offlineNotice = offlineNotice,
+                        onBack = { finish() }
+                    )
+                }
             }
         }
     }
@@ -61,8 +79,13 @@ class RoomDetailActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RoomDetailScreen(room: ConferenceRoom, offlineNotice: String?) {
+fun RoomDetailScreen(
+    room: ConferenceRoom,
+    offlineNotice: String?,
+    onBack: () -> Unit
+) {
     var reservations by remember { mutableStateOf<List<ReservationItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -76,55 +99,153 @@ fun RoomDetailScreen(room: ConferenceRoom, offlineNotice: String?) {
         if (result.isEmpty()) error = "暂无预约记录"
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-            .background(MaterialTheme.colorScheme.background),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = Modifier.fillMaxWidth()
+    RoomDetailContent(
+        room = room,
+        offlineNotice = offlineNotice,
+        reservations = reservations,
+        loading = loading,
+        error = error,
+        onBack = onBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoomDetailContent(
+    room: ConferenceRoom,
+    offlineNotice: String?,
+    reservations: List<ReservationItem>,
+    loading: Boolean,
+    error: String?,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(room.name, fontSize = 22.sp)
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "返回"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (offlineNotice != null) {
-                    Text(
-                        text = offlineNotice,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp
-                    )
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (offlineNotice != null) {
+                        Text(
+                            text = offlineNotice,
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Text(room.name, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text("房间ID: ${room.id}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("位置: ${room.location}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("容量: ${room.minCapacity} - ${room.maxCapacity} 人", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    RoomStatusBadge(room = room)
                 }
-                Text(room.name, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text("房间ID: ${room.id}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("位置: ${room.location}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("容量: ${room.minCapacity} - ${room.maxCapacity} 人", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("状态: ${room.status}", fontSize = 12.sp, color = if (room.inUse) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("当前预约请求", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+
+                    if (loading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (error != null) {
+                        Text(error ?: "加载失败", color = MaterialTheme.colorScheme.error)
+                    } else {
+                        ReservationTable(reservations)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ReservationCalendar3Day(reservations)
+                    }
+                }
             }
         }
+    }
+}
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = Modifier.fillMaxWidth()
+@Preview(showBackground = true, widthDp = 420, heightDp = 900)
+@Composable
+private fun RoomDetailScreenPreview() {
+    val previewRoom = ConferenceRoom(
+        id = "105",
+        name = "研讨室 A707",
+        minCapacity = 6,
+        maxCapacity = 12,
+        location = "彭家坪校区 7 楼研讨 A 区",
+        floor = "7F",
+        inUse = false,
+        status = "空闲"
+    )
+    val previewReservations = listOf(
+        ReservationItem(
+            id = "284941",
+            title = "预约记录",
+            startTime = "03/30/2026 08:00",
+            endTime = "03/30/2026 10:00"
+        ),
+        ReservationItem(
+            id = "284944",
+            title = "预约记录",
+            startTime = "03/31/2026 13:00",
+            endTime = "03/31/2026 15:30"
+        ),
+        ReservationItem(
+            id = "285064",
+            title = "预约记录",
+            startTime = "04/01/2026 18:30",
+            endTime = "04/01/2026 21:00"
+        )
+    )
+
+    MyApplicationTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
         ) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("当前预约请求", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-
-                if (loading) {
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (error != null) {
-                    Text(error ?: "加载失败", color = MaterialTheme.colorScheme.error)
-                } else {
-                    ReservationTable(reservations)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ReservationCalendar3Day(reservations)
-                }
-            }
+            RoomDetailContent(
+                room = previewRoom,
+                offlineNotice = "预览数据：当前为本地示例，不代表实时预约状态",
+                reservations = previewReservations,
+                loading = false,
+                error = null,
+                onBack = {}
+            )
         }
     }
 }
