@@ -842,8 +842,8 @@ fun CategoryTab(
 class SearchAvailabilityState {
     private val initialClock: LocalDateTime = LocalDateTime.now()
     var selectedDate by mutableStateOf(initialClock.toLocalDate())
-    var startTime by mutableStateOf(initialClock.toLocalTime().truncatedTo(ChronoUnit.MINUTES))
-    var endTime by mutableStateOf(nearestWholeHour(initialClock.toLocalTime().plusHours(2)))
+    var startTime by mutableStateOf(nextQuarterHour(initialClock.toLocalTime()))
+    var endTime by mutableStateOf(nearestHalfHour(initialClock.toLocalTime().plusHours(2)))
     var selectedCampus by mutableStateOf("全部")
     var filterText by mutableStateOf("")
     var enableTransit by mutableStateOf(false)
@@ -1278,7 +1278,9 @@ fun SearchAvailabilityScreen(
                         }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { enableTransit = !enableTransit },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
@@ -1715,9 +1717,21 @@ fun BottomNavigationBar(
     }
 }
 
-private fun nearestWholeHour(time: LocalTime): LocalTime {
-    val baseHour = time.truncatedTo(ChronoUnit.HOURS)
-    return if (time.minute >= 30) baseHour.plusHours(1) else baseHour
+private fun nearestHalfHour(time: LocalTime): LocalTime {
+    val truncated = time.truncatedTo(ChronoUnit.MINUTES)
+    val remainder = truncated.minute % 30
+    return if (remainder < 15) {
+        truncated.minusMinutes(remainder.toLong())
+    } else {
+        truncated.plusMinutes((30 - remainder).toLong())
+    }
+}
+
+private fun nextQuarterHour(time: LocalTime): LocalTime {
+    val truncated = time.truncatedTo(ChronoUnit.MINUTES)
+    val remainder = truncated.minute % 15
+    if (remainder == 0) return truncated
+    return truncated.plusMinutes((15 - remainder).toLong())
 }
 
 //@Preview(showBackground = true)
