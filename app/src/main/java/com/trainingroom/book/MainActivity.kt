@@ -91,6 +91,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -855,9 +856,28 @@ fun SearchAvailabilityScreen(
     val scrollState = rememberScrollState()
 
     LaunchedEffect(rooms) {
-            ongoing = state.ongoing
-            isFetchingRooms = state.isFetchingRooms
-            if (!hasLoadedCache) {
+        ongoing = state.ongoing
+        isFetchingRooms = state.isFetchingRooms
+
+        if (rooms.isEmpty()) {
+            if (!isFetchingRooms && reservationResults.isEmpty()) {
+                statusText = "等待研讨室列表加载"
+            }
+            state.selectedDate = selectedDate
+            state.startTime = startTime
+            state.endTime = endTime
+            state.filterText = filterText
+            state.enableTransit = enableTransit
+            state.ongoing = ongoing
+            state.isFetchingRooms = isFetchingRooms
+            state.statusText = statusText
+            state.hasLoadedCache = hasLoadedCache
+            state.availableRooms = availableRooms
+            state.resultMessage = resultMessage
+            return@LaunchedEffect
+        }
+
+        if (!hasLoadedCache) {
             val cached = loadReservationsCache(context)
             val validIds = rooms.map { it.id }.toSet()
             cached.forEach { (roomId, list) ->
@@ -873,7 +893,20 @@ fun SearchAvailabilityScreen(
             }
             hasLoadedCache = true
         } else {
-            statusText = "已缓存 ${reservationResults.size}/${state.totalRooms}"
+            val validIds = rooms.map { it.id }.toSet()
+            reservationResults.keys.toList().forEach { roomId ->
+                if (roomId !in validIds) {
+                    reservationResults.remove(roomId)
+                }
+            }
+            ongoing = reservationResults.size
+            if (!isFetchingRooms) {
+                statusText = if (reservationResults.isNotEmpty()) {
+                    "已缓存 ${reservationResults.size}/${state.totalRooms}"
+                } else {
+                    "等待获取所有研讨室结果（0/${state.totalRooms}）"
+                }
+            }
         }
         state.selectedDate = selectedDate
         state.startTime = startTime
@@ -886,6 +919,85 @@ fun SearchAvailabilityScreen(
         state.hasLoadedCache = hasLoadedCache
         state.availableRooms = availableRooms
         state.resultMessage = resultMessage
+    }
+
+    val runQuery: () -> Unit = runQuery@{
+        if (state.totalRooms == 0) {
+            resultMessage = "研讨室列表加载中，请稍后重试"
+            availableRooms = emptyList()
+            return@runQuery
+        }
+        if (startTime >= endTime) {
+            resultMessage = "开始时间需早于结束时间"
+            availableRooms = emptyList()
+            return@runQuery
+        }
+        val userStart = LocalDateTime.of(selectedDate, startTime)
+        val userEnd = LocalDateTime.of(selectedDate, endTime)
+
+        val filteredRooms = rooms.filter { room ->
+            selectedCampus == "全部" || room.campus() == selectedCampus
+        }
+
+        val free = filteredRooms.filter { room ->
+            val reservations = reservationResults[room.id].orEmpty()
+            val hasOverlap = reservations.any { item ->
+                val s = item.startDateTime()
+                val e = item.endDateTime()
+                if (s == null || e == null) return@any false
+                if (s.toLocalDate() != selectedDate) return@any false
+                !(e <= userStart || s >= userEnd)
+            }
+            !hasOverlap
+        }.sortedBy { it.name }
+
+        availableRooms = free
+
+        if (enableTransit) {
+            transitPlans = findTransitPlans(
+                rooms = filteredRooms,
+                reservationResults = reservationResults,
+                userStart = userStart,
+                userEnd = userEnd,
+                campus = selectedCampus,
+                directFreeRoomIds = free.map { it.id }.toSet()
+            )
+        } else {
+            transitPlans = emptyList()
+        }
+
+        val transitSuffix = if (enableTransit && transitPlans.isNotEmpty()) {
+            "，可用中转方案 ${transitPlans.size} 条"
+        } else ""
+
+        resultMessage = "空闲房间 ${free.size}/${state.totalRooms}${transitSuffix}"
+    }
+
+    val refreshReservations: ((() -> Unit)?) -> Unit = refresh@{ afterFetch ->
+        if (state.totalRooms == 0 || isFetchingRooms) {
+            return@refresh
+        }
+        isFetchingRooms = true
+        ongoing = 0
+        statusText = "获取中（0/${state.totalRooms}）"
+        scope.launch {
+            try {
+                rooms.forEachIndexed { idx, room ->
+                    val res = fetchReservations(room.id)
+                    reservationResults[room.id] = res
+                    ongoing = idx + 1
+                    statusText = "获取中（${ongoing}/${state.totalRooms}）"
+                }
+                statusText = "获取完成（${ongoing}/${state.totalRooms}）"
+                saveReservationsCache(context, reservationResults.toMap())
+                afterFetch?.invoke()
+            } catch (e: CancellationException) {
+                statusText = "获取已取消（${ongoing}/${state.totalRooms}）"
+                throw e
+            } finally {
+                isFetchingRooms = false
+            }
+        }
     }
 
     Column(
@@ -1035,69 +1147,8 @@ fun SearchAvailabilityScreen(
 
         Button(
             onClick = {
-                val runQuery: () -> Unit = runQuery@{
-                    if (startTime >= endTime) {
-                        resultMessage = "开始时间需早于结束时间"
-                        availableRooms = emptyList()
-                        return@runQuery
-                    }
-                    val userStart = LocalDateTime.of(selectedDate, startTime)
-                    val userEnd = LocalDateTime.of(selectedDate, endTime)
-
-                    val filteredRooms = rooms.filter { room ->
-                        selectedCampus == "全部" || room.campus() == selectedCampus
-                    }
-
-                    val free = filteredRooms.filter { room ->
-                        val reservations = reservationResults[room.id].orEmpty()
-                        val hasOverlap = reservations.any { item ->
-                            val s = item.startDateTime()
-                            val e = item.endDateTime()
-                            if (s == null || e == null) return@any false
-                            if (s.toLocalDate() != selectedDate) return@any false
-                            !(e <= userStart || s >= userEnd)
-                        }
-                        !hasOverlap
-                    }.sortedBy { it.name }
-
-                    availableRooms = free
-
-                    if (enableTransit) {
-                        transitPlans = findTransitPlans(
-                            rooms = filteredRooms,
-                            reservationResults = reservationResults,
-                            userStart = userStart,
-                            userEnd = userEnd,
-                            campus = selectedCampus,
-                            directFreeRoomIds = free.map { it.id }.toSet()
-                        )
-                    } else {
-                        transitPlans = emptyList()
-                    }
-
-                    val transitSuffix = if (enableTransit && transitPlans.isNotEmpty()) {
-                        "，可用中转方案 ${transitPlans.size} 条"
-                    } else ""
-
-                    resultMessage = "空闲房间 ${free.size}/${state.totalRooms}${transitSuffix}"
-                }
-
                 if (reservationResults.isEmpty() && !isFetchingRooms && state.totalRooms > 0) {
-                    isFetchingRooms = true
-                    ongoing = 0
-                    statusText = "获取中（0/${state.totalRooms}）"
-                    scope.launch {
-                        rooms.forEachIndexed { idx, room ->
-                            val res = fetchReservations(room.id)
-                            reservationResults[room.id] = res
-                            ongoing = idx + 1
-                            statusText = "获取中（${ongoing}/${state.totalRooms}）"
-                        }
-                        statusText = "获取完成（${ongoing}/${state.totalRooms}）"
-                        isFetchingRooms = false
-                            saveReservationsCache(context, reservationResults.toMap())
-                        runQuery()
-                    }
+                    refreshReservations(runQuery)
                 } else {
                     runQuery()
                 }
@@ -1184,20 +1235,7 @@ fun SearchAvailabilityScreen(
                     indication = null
                 ) {
                     if (isFetchingRooms) return@clickable
-                    isFetchingRooms = true
-                    ongoing = 0
-                    statusText = "获取中（0/${state.totalRooms}）"
-                    scope.launch {
-                        rooms.forEachIndexed { idx, room ->
-                            val res = fetchReservations(room.id)
-                            reservationResults[room.id] = res
-                            ongoing = idx + 1
-                            statusText = "获取中（${ongoing}/${state.totalRooms}）"
-                        }
-                        statusText = "获取完成（${ongoing}/${state.totalRooms}）"
-                        isFetchingRooms = false
-                            saveReservationsCache(context, reservationResults.toMap())
-                    }
+                    refreshReservations(null)
                 }
         )
     }

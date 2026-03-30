@@ -59,7 +59,7 @@ jobs:
           exit 1
         fi
         APP_NAME=$(grep -m1 'name="app_name"' app/src/main/res/values/strings.xml | sed -E 's/.*>([^<]+)<.*/\1/' | tr ' ' '_')
-        ARTIFACT_BASE="${APP_NAME}-${VERSION_NAME}"
+        ARTIFACT_BASE="${APP_NAME}-${VERSION_NAME}(${VERSION_CODE})"
         echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
         echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
         echo "artifact_basename=${ARTIFACT_BASE}" >> $GITHUB_OUTPUT
@@ -79,9 +79,8 @@ jobs:
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: ${{ steps.detect_version.outputs.artifact_basename }}-release
+        name: ${{ steps.detect_version.outputs.artifact_basename }}
         path: app/build/outputs/apk/release/*.apk
-        retention-days: 30
 
     - name: Upload R8 mapping (release)
       uses: actions/upload-artifact@v4
@@ -111,7 +110,7 @@ jobs:
       if: needs.release.result == 'success'
       uses: actions/download-artifact@v4
       with:
-        name: ${{ needs.release.outputs.artifact_basename }}-release
+        name: ${{ needs.release.outputs.artifact_basename }}
         path: artifacts/apk
 
     - name: Send Telegram message and release APK
@@ -123,9 +122,8 @@ jobs:
         VERSION_CODE: ${{ needs.release.outputs.version_code }}
         STATUS: ${{ needs.release.result }}
         COMMIT_MESSAGE: |+
-          New release build pushed\!
-          Version: `${{ needs.release.outputs.version_name }}`
-          Version code: `${{ needs.release.outputs.version_code }}`
+          New push to Github\!
+          \#TrainRoom
           ```
           ${{ github.event.head_commit.message }}
           ```by `${{ github.event.head_commit.author.name }}`
