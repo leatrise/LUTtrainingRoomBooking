@@ -154,6 +154,101 @@ fun ConferenceRoom.shortLabel(): String {
     return match ?: name.split(" ").lastOrNull() ?: id
 }
 
+private enum class CapacityOperator {
+    LT,
+    GT,
+    GTE,
+    LTE,
+    EQ
+}
+
+private sealed interface QueryFilter {
+    fun matches(room: ConferenceRoom): Boolean
+}
+
+private data class FloorQueryFilter(val floorDigit: Char) : QueryFilter {
+    override fun matches(room: ConferenceRoom): Boolean =
+        room.roomNumber()?.startsWith(floorDigit) == true
+}
+
+private data class RoomNumberQueryFilter(val roomNumber: String) : QueryFilter {
+    override fun matches(room: ConferenceRoom): Boolean = room.roomNumber() == roomNumber
+}
+
+private data class SearchTextQueryFilter(val keyword: String) : QueryFilter {
+    override fun matches(room: ConferenceRoom): Boolean {
+        val normalizedKeyword = keyword.uppercase()
+        val candidates = listOfNotNull(
+            room.shortLabel(),
+            room.roomNumber(),
+            room.name
+        ).map { it.uppercase() }
+        return candidates.any { normalizedKeyword in it }
+    }
+}
+
+private data class CapacityQueryFilter(
+    val operator: CapacityOperator,
+    val peopleCount: Int
+) : QueryFilter {
+    override fun matches(room: ConferenceRoom): Boolean =
+        room.matchesCapacity(operator = operator, peopleCount = peopleCount)
+}
+
+private val capacityFilterRegex = Regex("""(<=|>=|≤|≥|=|<|>)\s*(\d+)""")
+private val singleDigitFloorRegex = Regex("""\d""")
+private val threeDigitRoomRegex = Regex("""\d{3}""")
+private val alphaNumericFilterRegex = Regex("""[A-Za-z0-9]+""")
+
+private fun parseQueryFilter(input: String): QueryFilter? {
+    val normalized = input.trim()
+    if (normalized.isEmpty()) return null
+    if (singleDigitFloorRegex.matches(normalized)) {
+        return FloorQueryFilter(normalized.first())
+    }
+    if (threeDigitRoomRegex.matches(normalized)) {
+        return RoomNumberQueryFilter(normalized)
+    }
+    val match = capacityFilterRegex.matchEntire(normalized) ?: return null
+    val operator = when (match.groupValues[1]) {
+        "<" -> CapacityOperator.LT
+        ">" -> CapacityOperator.GT
+        ">=", "≥" -> CapacityOperator.GTE
+        "<=", "≤" -> CapacityOperator.LTE
+        "=" -> CapacityOperator.EQ
+        else -> return null
+    }
+    return CapacityQueryFilter(
+        operator = operator,
+        peopleCount = match.groupValues[2].toInt()
+    )
+}
+
+private fun parseFreeTextQueryFilter(input: String): QueryFilter? {
+    val normalized = input.trim()
+    if (normalized.isEmpty()) return null
+    if (!alphaNumericFilterRegex.matches(normalized)) return null
+    return SearchTextQueryFilter(normalized)
+}
+
+private fun ConferenceRoom.roomNumber(): String? {
+    val fromShortLabel = Regex("""\d{3}""").find(shortLabel())?.value
+    return fromShortLabel ?: Regex("""\d{3}""").find(name)?.value
+}
+
+private fun ConferenceRoom.matchesCapacity(
+    operator: CapacityOperator,
+    peopleCount: Int
+): Boolean {
+    return when (operator) {
+        CapacityOperator.LT -> minCapacity < peopleCount
+        CapacityOperator.GT -> maxCapacity > peopleCount
+        CapacityOperator.GTE -> maxCapacity >= peopleCount
+        CapacityOperator.LTE -> minCapacity <= peopleCount
+        CapacityOperator.EQ -> peopleCount in minCapacity..maxCapacity
+    }
+}
+
 fun ConferenceRoom.campus(): String {
     val lower = location.lowercase()
     return when {
@@ -1101,9 +1196,20 @@ fun SearchAvailabilityScreen(
         }
         val userStart = LocalDateTime.of(selectedDate, startTime)
         val userEnd = LocalDateTime.of(selectedDate, endTime)
+        val trimmedFilterText = filterText.trim()
+        val queryFilter = parseQueryFilter(trimmedFilterText) ?: parseFreeTextQueryFilter(trimmedFilterText)
+
+        if (trimmedFilterText.isNotEmpty() && queryFilter == null) {
+            resultMessage = "筛选条件格式异常，支持示例：5、507、>=10"
+            availableRooms = emptyList()
+            transitPlans = emptyList()
+            return@runQuery
+        }
 
         val filteredRooms = rooms.filter { room ->
             selectedCampus == "全部" || room.campus() == selectedCampus
+        }.filter { room ->
+            queryFilter?.matches(room) ?: true
         }
 
         val free = filteredRooms.filter { room ->
@@ -1137,7 +1243,7 @@ fun SearchAvailabilityScreen(
             "，可用中转方案 ${transitPlans.size} 条"
         } else ""
 
-        resultMessage = "空闲房间 ${free.size}/${state.totalRooms}${transitSuffix}"
+        resultMessage = "空闲房间 ${free.size}/${filteredRooms.size}${transitSuffix}"
     }
 
     val refreshReservations: ((() -> Unit)?) -> Unit = refresh@{ afterFetch ->
@@ -1347,7 +1453,7 @@ fun SearchAvailabilityScreen(
                                 onValueChange = { filterText = it },
                                 modifier = Modifier.weight(1f),
                                 label = { Text("筛选条件") },
-                                placeholder = { Text("可输入关键字或楼层") }
+                                placeholder = { Text("如 5 / 507 / >=6") }
                             )
                         }
 
@@ -1358,7 +1464,7 @@ fun SearchAvailabilityScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
-                            Text("是否启用中转方案", fontSize = 12.sp)
+                            Text("搜索中转方案", fontSize = 12.sp)
                         }
                     }
                 }
