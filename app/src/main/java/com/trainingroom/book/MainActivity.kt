@@ -82,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -399,15 +400,33 @@ private fun formatCacheTimestamp(raw: String?): String? {
 }
 
 private const val CACHE_MAX_AGE_MILLIS = 24 * 60 * 60 * 1000L
+private const val CACHE_WARN_AGE_MILLIS = 2 * 60 * 60 * 1000L
+private const val CACHE_DANGER_AGE_MILLIS = 12 * 60 * 60 * 1000L
 
 private fun isCacheExpired(raw: String?, nowMillis: Long = System.currentTimeMillis()): Boolean {
     val savedAt = raw?.trim()?.toLongOrNull() ?: return true
     return nowMillis - savedAt > CACHE_MAX_AGE_MILLIS
 }
 
+private fun cacheAgeMillis(raw: String?, nowMillis: Long = System.currentTimeMillis()): Long? {
+    val savedAt = raw?.trim()?.toLongOrNull() ?: return null
+    val age = nowMillis - savedAt
+    return if (age >= 0) age else null
+}
+
+private fun formatCacheAgeText(ageMillis: Long?): String? {
+    val age = ageMillis ?: return null
+    return when {
+        age < 60_000L -> "刚刚获取"
+        age < 60 * 60 * 1000L -> "${age / 60_000L}分钟前"
+        else -> "${age / (60 * 60 * 1000L)}小时前"
+    }
+}
+
 private fun buildReservationsCacheStatus(
     prefix: String,
     count: Int,
+    cacheAgeText: String?,
     cacheTimeText: String?
 ): String {
     return buildString {
@@ -415,11 +434,37 @@ private fun buildReservationsCacheStatus(
         append('·')
         append(count)
         append("个")
-        cacheTimeText?.let {
+        cacheAgeText?.let {
             append('·')
             append(it)
         }
+        cacheTimeText?.let {
+            if (cacheAgeText != null) {
+                append(' ')
+            } else {
+                append('·')
+            }
+            append('(')
+            append(it)
+            append(')')
+        }
     }
+}
+
+private fun refreshReservationsCacheStatus(
+    count: Int,
+    savedAtMillis: Long?,
+    cacheTimeText: String?
+): Pair<Long?, String> {
+    val ageMillis = savedAtMillis?.let { savedAt ->
+        (System.currentTimeMillis() - savedAt).coerceAtLeast(0L)
+    }
+    return ageMillis to buildReservationsCacheStatus(
+        prefix = "已加载缓存",
+        count = count,
+        cacheAgeText = formatCacheAgeText(ageMillis),
+        cacheTimeText = cacheTimeText
+    )
 }
 
 private suspend fun saveReservationsCache(
@@ -853,6 +898,8 @@ class SearchAvailabilityState {
     var isFetchingRooms by mutableStateOf(false)
     var statusText by mutableStateOf("等待获取所有研讨室结果（0/0）")
     var reservationsCacheTimeText by mutableStateOf<String?>(null)
+    var reservationsCacheAgeMillis by mutableStateOf<Long?>(null)
+    var reservationsCacheSavedAtMillis by mutableStateOf<Long?>(null)
     val reservationResults = mutableStateMapOf<String, List<ReservationItem>>()
     var hasLoadedCache by mutableStateOf(false)
     var availableRooms by mutableStateOf<List<ConferenceRoom>>(emptyList())
@@ -882,6 +929,8 @@ fun SearchAvailabilityScreen(
     var isFetchingRooms by state::isFetchingRooms
     var statusText by state::statusText
     var reservationsCacheTimeText by state::reservationsCacheTimeText
+    var reservationsCacheAgeMillis by state::reservationsCacheAgeMillis
+    var reservationsCacheSavedAtMillis by state::reservationsCacheSavedAtMillis
     var showRefreshConfirm by remember { mutableStateOf(false) }
     val reservationResults = state.reservationResults
     var hasLoadedCache by state::hasLoadedCache
@@ -953,6 +1002,8 @@ fun SearchAvailabilityScreen(
             state.isFetchingRooms = isFetchingRooms
             state.statusText = statusText
             state.reservationsCacheTimeText = reservationsCacheTimeText
+            state.reservationsCacheAgeMillis = reservationsCacheAgeMillis
+            state.reservationsCacheSavedAtMillis = reservationsCacheSavedAtMillis
             state.hasLoadedCache = hasLoadedCache
             state.availableRooms = availableRooms
             state.resultMessage = resultMessage
@@ -962,10 +1013,14 @@ fun SearchAvailabilityScreen(
         if (!hasLoadedCache) {
             val cached = loadReservationsCache(context)
             val rawCacheTimestamp = loadReservationsCacheTimestamp(context)
-            reservationsCacheTimeText = if (isCacheExpired(rawCacheTimestamp)) {
-                null
+            if (isCacheExpired(rawCacheTimestamp)) {
+                reservationsCacheTimeText = null
+                reservationsCacheAgeMillis = null
+                reservationsCacheSavedAtMillis = null
             } else {
-                formatCacheTimestamp(rawCacheTimestamp)
+                reservationsCacheTimeText = formatCacheTimestamp(rawCacheTimestamp)
+                reservationsCacheSavedAtMillis = rawCacheTimestamp?.trim()?.toLongOrNull()
+                reservationsCacheAgeMillis = cacheAgeMillis(rawCacheTimestamp)
             }
             val validIds = rooms.map { it.id }.toSet()
             cached.forEach { (roomId, list) ->
@@ -975,11 +1030,13 @@ fun SearchAvailabilityScreen(
             }
             ongoing = reservationResults.size
             statusText = if (reservationResults.isNotEmpty()) {
-                buildReservationsCacheStatus(
-                    prefix = "已加载缓存",
+                val (ageMillis, cacheStatusText) = refreshReservationsCacheStatus(
                     count = reservationResults.size,
+                    savedAtMillis = reservationsCacheSavedAtMillis,
                     cacheTimeText = reservationsCacheTimeText
                 )
+                reservationsCacheAgeMillis = ageMillis
+                cacheStatusText
             } else {
                 "等待获取所有研讨室结果（0/${state.totalRooms}）"
             }
@@ -994,11 +1051,13 @@ fun SearchAvailabilityScreen(
             ongoing = reservationResults.size
             if (!isFetchingRooms) {
                 statusText = if (reservationResults.isNotEmpty()) {
-                    buildReservationsCacheStatus(
-                        prefix = "已加载缓存",
+                    val (ageMillis, cacheStatusText) = refreshReservationsCacheStatus(
                         count = reservationResults.size,
+                        savedAtMillis = reservationsCacheSavedAtMillis,
                         cacheTimeText = reservationsCacheTimeText
                     )
+                    reservationsCacheAgeMillis = ageMillis
+                    cacheStatusText
                 } else {
                     "等待获取所有研讨室结果（0/${state.totalRooms}）"
                 }
@@ -1013,6 +1072,8 @@ fun SearchAvailabilityScreen(
         state.isFetchingRooms = isFetchingRooms
         state.statusText = statusText
         state.reservationsCacheTimeText = reservationsCacheTimeText
+        state.reservationsCacheAgeMillis = reservationsCacheAgeMillis
+        state.reservationsCacheSavedAtMillis = reservationsCacheSavedAtMillis
         state.hasLoadedCache = hasLoadedCache
         state.availableRooms = availableRooms
         state.resultMessage = resultMessage
@@ -1028,6 +1089,15 @@ fun SearchAvailabilityScreen(
             resultMessage = "开始时间需早于结束时间"
             availableRooms = emptyList()
             return@runQuery
+        }
+        if (reservationResults.isNotEmpty()) {
+            val (ageMillis, cacheStatusText) = refreshReservationsCacheStatus(
+                count = reservationResults.size,
+                savedAtMillis = reservationsCacheSavedAtMillis,
+                cacheTimeText = reservationsCacheTimeText
+            )
+            reservationsCacheAgeMillis = ageMillis
+            statusText = cacheStatusText
         }
         val userStart = LocalDateTime.of(selectedDate, startTime)
         val userEnd = LocalDateTime.of(selectedDate, endTime)
@@ -1086,10 +1156,14 @@ fun SearchAvailabilityScreen(
                     statusText = "获取中（${ongoing}/${state.totalRooms}）"
                 }
                 saveReservationsCache(context, reservationResults.toMap())
-                reservationsCacheTimeText = formatCacheTimestamp(loadReservationsCacheTimestamp(context))
+                val rawTs = loadReservationsCacheTimestamp(context)
+                reservationsCacheTimeText = formatCacheTimestamp(rawTs)
+                reservationsCacheSavedAtMillis = rawTs?.trim()?.toLongOrNull()
+                reservationsCacheAgeMillis = cacheAgeMillis(rawTs)
                 statusText = buildReservationsCacheStatus(
                     prefix = "已加载缓存",
                     count = reservationResults.size,
+                    cacheAgeText = formatCacheAgeText(reservationsCacheAgeMillis),
                     cacheTimeText = reservationsCacheTimeText
                 )
                 afterFetch?.invoke()
@@ -1392,7 +1466,17 @@ fun SearchAvailabilityScreen(
                 val statusInteractionSource = remember { MutableInteractionSource() }
                 Text(
                     text = statusText,
-                    color = if (isFetchingRooms) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = run {
+                        val warnColor = Color(0xFFB35C00)
+                        when {
+                            isFetchingRooms -> MaterialTheme.colorScheme.primary
+                            reservationResults.isNotEmpty() && (reservationsCacheAgeMillis ?: 0) >= CACHE_DANGER_AGE_MILLIS ->
+                                MaterialTheme.colorScheme.error
+                            reservationResults.isNotEmpty() && (reservationsCacheAgeMillis ?: 0) >= CACHE_WARN_AGE_MILLIS ->
+                                warnColor
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
@@ -1402,7 +1486,11 @@ fun SearchAvailabilityScreen(
                         ) {
                             if (isFetchingRooms) return@clickable
                             if (reservationResults.isNotEmpty()) {
-                                showRefreshConfirm = true
+                                if ((reservationsCacheAgeMillis ?: 0L) >= CACHE_DANGER_AGE_MILLIS) {
+                                    refreshReservations(null)
+                                } else {
+                                    showRefreshConfirm = true
+                                }
                             } else {
                                 refreshReservations(null)
                             }
@@ -1787,8 +1875,10 @@ fun SearchAvailabilityScreenPreview() {
         totalRooms = previewRooms.size
         ongoing = previewRooms.size
         isFetchingRooms = false
-        statusText = "已加载缓存·${previewRooms.size}个·3/30 19:20"
+        statusText = "已加载缓存·${previewRooms.size}个·3小时前 (3/30 19:20)"
         reservationsCacheTimeText = "3/30 19:20"
+        reservationsCacheAgeMillis = 3 * 60 * 60 * 1000L
+        reservationsCacheSavedAtMillis = System.currentTimeMillis() - (reservationsCacheAgeMillis ?: 0L)
         hasLoadedCache = true
         availableRooms = previewRooms.take(2)
         transitPlans = listOf(
