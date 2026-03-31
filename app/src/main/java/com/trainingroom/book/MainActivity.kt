@@ -1408,100 +1408,38 @@ fun SearchAvailabilityScreen(
     }
 
     if (showAdvancedOptionsHint) {
-        AlertDialog(
+        AdvancedFilterDialog(
+            advancedOperator = advancedOperator,
+            advancedPeopleCountText = advancedPeopleCountText,
+            advancedRoomFilterText = advancedRoomFilterText,
+            advancedOperatorExpanded = advancedOperatorExpanded,
             onDismissRequest = { showAdvancedOptionsHint = false },
-            title = { Text("高级筛选") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("设置人数筛选条件")
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ExposedDropdownMenuBox(
-                            expanded = advancedOperatorExpanded,
-                            onExpandedChange = { advancedOperatorExpanded = !advancedOperatorExpanded },
-                            modifier = Modifier.width(132.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = advancedOperatorLabel(advancedOperator),
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("条件") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = advancedOperatorExpanded)
-                                },
-                                modifier = Modifier.menuAnchor()
-                            )
-                            DropdownMenu(
-                                expanded = advancedOperatorExpanded,
-                                onDismissRequest = { advancedOperatorExpanded = false }
-                            ) {
-                                advancedOperatorOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        onClick = {
-                                            advancedOperator = option.symbol
-                                            advancedOperatorExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = advancedPeopleCountText,
-                            onValueChange = { input ->
-                                if (input.all { it.isDigit() }) {
-                                    advancedPeopleCountText = input
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            label = { Text("人数") },
-                            placeholder = { Text("输入人数") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    }
-
-                    Text("设置楼层或房间号")
-                    OutlinedTextField(
-                        value = advancedRoomFilterText,
-                        onValueChange = { input ->
-                            if (input.all { it.isLetterOrDigit() }) {
-                                advancedRoomFilterText = input.uppercase()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("楼层/房间号") },
-                        placeholder = { Text("如 5 / 507 / A5") },
-                        singleLine = true
-                    )
+            onOperatorExpandedChange = { advancedOperatorExpanded = it },
+            onOperatorChange = {
+                advancedOperator = it
+                advancedOperatorExpanded = false
+            },
+            onPeopleCountChange = { input ->
+                if (input.all { it.isDigit() }) {
+                    advancedPeopleCountText = input
                 }
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val mergedCapacity = mergeCapacityFilter(
-                            input = filterText,
-                            operatorSymbol = advancedOperator,
-                            peopleCountText = advancedPeopleCountText
-                        )
-                        filterText = mergeTextFilter(
-                            input = mergedCapacity,
-                            text = advancedRoomFilterText
-                        )
-                        showAdvancedOptionsHint = false
-                    }
-                ) {
-                    Text("确定")
+            onRoomFilterChange = { input ->
+                if (input.all { it.isLetterOrDigit() }) {
+                    advancedRoomFilterText = input.uppercase()
                 }
             },
-            dismissButton = {
-                Button(onClick = { showAdvancedOptionsHint = false }) {
-                    Text("取消")
-                }
+            onConfirm = {
+                val mergedCapacity = mergeCapacityFilter(
+                    input = filterText,
+                    operatorSymbol = advancedOperator,
+                    peopleCountText = advancedPeopleCountText
+                )
+                filterText = mergeTextFilter(
+                    input = mergedCapacity,
+                    text = advancedRoomFilterText
+                )
+                showAdvancedOptionsHint = false
             }
         )
     }
@@ -2023,6 +1961,95 @@ fun ConferenceRoomListItem(room: ConferenceRoom, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AdvancedFilterDialog(
+    advancedOperator: String,
+    advancedPeopleCountText: String,
+    advancedRoomFilterText: String,
+    advancedOperatorExpanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onOperatorExpandedChange: (Boolean) -> Unit,
+    onOperatorChange: (String) -> Unit,
+    onPeopleCountChange: (String) -> Unit,
+    onRoomFilterChange: (String) -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("高级筛选") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("设置人数筛选条件")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = advancedOperatorExpanded,
+                        onExpandedChange = { onOperatorExpandedChange(!advancedOperatorExpanded) },
+                        modifier = Modifier.width(132.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = advancedOperatorLabel(advancedOperator),
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("条件") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = advancedOperatorExpanded)
+                            },
+                            modifier = Modifier.menuAnchor()
+                        )
+                        DropdownMenu(
+                            expanded = advancedOperatorExpanded,
+                            onDismissRequest = { onOperatorExpandedChange(false) }
+                        ) {
+                            advancedOperatorOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.label) },
+                                    onClick = { onOperatorChange(option.symbol) }
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = advancedPeopleCountText,
+                        onValueChange = onPeopleCountChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("人数") },
+                        placeholder = { Text("输入人数") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("设置楼层或房间号")
+                OutlinedTextField(
+                    value = advancedRoomFilterText,
+                    onValueChange = onRoomFilterChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("楼层/房间号") },
+                    placeholder = { Text("如 5 / 507 / A5") },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismissRequest) {
+                Text("取消")
+            }
+        }
+    )
+}
+
 @Composable
 fun RoomStatusBadge(room: ConferenceRoom) {
     val containerColor = if (room.inUse) {
@@ -2236,6 +2263,46 @@ fun SearchAvailabilityScreenPreview() {
                 rooms = previewRooms,
                 state = previewState,
                 onRoomSelected = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 720)
+@Composable
+fun AdvancedFilterDialogPreview() {
+    var advancedOperator by remember { mutableStateOf("≥") }
+    var advancedPeopleCountText by remember { mutableStateOf("8") }
+    var advancedRoomFilterText by remember { mutableStateOf("A5") }
+    var advancedOperatorExpanded by remember { mutableStateOf(false) }
+
+    MyApplicationTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            AdvancedFilterDialog(
+                advancedOperator = advancedOperator,
+                advancedPeopleCountText = advancedPeopleCountText,
+                advancedRoomFilterText = advancedRoomFilterText,
+                advancedOperatorExpanded = advancedOperatorExpanded,
+                onDismissRequest = {},
+                onOperatorExpandedChange = { advancedOperatorExpanded = it },
+                onOperatorChange = {
+                    advancedOperator = it
+                    advancedOperatorExpanded = false
+                },
+                onPeopleCountChange = { input ->
+                    if (input.all { it.isDigit() }) {
+                        advancedPeopleCountText = input
+                    }
+                },
+                onRoomFilterChange = { input ->
+                    if (input.all { it.isLetterOrDigit() }) {
+                        advancedRoomFilterText = input.uppercase()
+                    }
+                },
+                onConfirm = {}
             )
         }
     }
