@@ -60,12 +60,14 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -85,7 +87,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.parcelize.Parcelize
 import coil.compose.AsyncImage
@@ -195,12 +199,35 @@ private data class CapacityQueryFilter(
         room.matchesCapacity(operator = operator, peopleCount = peopleCount)
 }
 
+private data class CapacityFilterDraft(
+    val operatorSymbol: String,
+    val peopleCountText: String
+)
+
+private data class AdvancedOperatorOption(
+    val label: String,
+    val symbol: String
+)
+
 private val capacityFilterRegex = Regex("""(<=|>=|≤|≥|=|<|>)\s*(\d+)""")
 private val singleDigitFloorRegex = Regex("""\d""")
 private val threeDigitRoomRegex = Regex("""\d{3}""")
 private val alphaNumericFilterRegex = Regex("""[A-Za-z0-9]+""")
+private val advancedOperatorOptions = listOf(
+    AdvancedOperatorOption("大于", ">"),
+    AdvancedOperatorOption("小于", "<"),
+    AdvancedOperatorOption("等于", "="),
+    AdvancedOperatorOption("大于等于", "≥"),
+    AdvancedOperatorOption("小于等于", "≤")
+)
 
-private fun parseQueryFilter(input: String): QueryFilter? {
+private fun advancedOperatorLabel(symbol: String): String =
+    advancedOperatorOptions.firstOrNull { it.symbol == symbol }?.label ?: symbol
+
+private fun splitFilterTokens(input: String): List<String> =
+    input.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+private fun parseSingleQueryFilter(input: String): QueryFilter? {
     val normalized = input.trim()
     if (normalized.isEmpty()) return null
     if (singleDigitFloorRegex.matches(normalized)) {
@@ -224,11 +251,81 @@ private fun parseQueryFilter(input: String): QueryFilter? {
     )
 }
 
-private fun parseFreeTextQueryFilter(input: String): QueryFilter? {
+private fun parseSingleFreeTextQueryFilter(input: String): QueryFilter? {
     val normalized = input.trim()
     if (normalized.isEmpty()) return null
     if (!alphaNumericFilterRegex.matches(normalized)) return null
     return SearchTextQueryFilter(normalized)
+}
+
+private fun parseQueryFilters(input: String): List<QueryFilter>? {
+    val tokens = splitFilterTokens(input)
+    if (tokens.isEmpty()) return emptyList()
+    return tokens.map { token ->
+        parseSingleQueryFilter(token) ?: parseSingleFreeTextQueryFilter(token) ?: return null
+    }
+}
+
+private fun readCapacityFilterDraft(input: String): CapacityFilterDraft? {
+    val match = splitFilterTokens(input)
+        .asSequence()
+        .mapNotNull { token -> capacityFilterRegex.matchEntire(token) }
+        .firstOrNull() ?: return null
+    val operatorSymbol = when (match.groupValues[1]) {
+        "<=" , "≤" -> "≤"
+        ">=", "≥" -> "≥"
+        "=" -> "="
+        "<" -> "<"
+        ">" -> ">"
+        else -> return null
+    }
+    return CapacityFilterDraft(
+        operatorSymbol = operatorSymbol,
+        peopleCountText = match.groupValues[2]
+    )
+}
+
+private fun readTextFilterDraft(input: String): String? =
+    splitFilterTokens(input)
+        .firstOrNull { token -> !capacityFilterRegex.matches(token) && alphaNumericFilterRegex.matches(token) }
+
+private fun mergeCapacityFilter(input: String, operatorSymbol: String, peopleCountText: String): String {
+    val tokens = splitFilterTokens(input).toMutableList()
+    val capacityIndex = tokens.indexOfFirst { capacityFilterRegex.matches(it) }
+    val normalizedPeopleCountText = peopleCountText.trim()
+    if (normalizedPeopleCountText.isEmpty()) {
+        if (capacityIndex >= 0) {
+            tokens.removeAt(capacityIndex)
+        }
+        return tokens.joinToString(",")
+    }
+    val normalizedCapacityFilter = operatorSymbol + normalizedPeopleCountText
+    if (capacityIndex >= 0) {
+        tokens[capacityIndex] = normalizedCapacityFilter
+    } else {
+        tokens += normalizedCapacityFilter
+    }
+    return tokens.joinToString(",")
+}
+
+private fun mergeTextFilter(input: String, text: String): String {
+    val tokens = splitFilterTokens(input).toMutableList()
+    val textIndex = tokens.indexOfFirst { token ->
+        !capacityFilterRegex.matches(token) && alphaNumericFilterRegex.matches(token)
+    }
+    val normalizedText = text.trim()
+    if (normalizedText.isEmpty()) {
+        if (textIndex >= 0) {
+            tokens.removeAt(textIndex)
+        }
+        return tokens.joinToString(",")
+    }
+    if (textIndex >= 0) {
+        tokens[textIndex] = normalizedText
+    } else {
+        tokens.add(0, normalizedText)
+    }
+    return tokens.joinToString(",")
 }
 
 private fun ConferenceRoom.roomNumber(): String? {
@@ -1027,6 +1124,11 @@ fun SearchAvailabilityScreen(
     var reservationsCacheAgeMillis by state::reservationsCacheAgeMillis
     var reservationsCacheSavedAtMillis by state::reservationsCacheSavedAtMillis
     var showRefreshConfirm by remember { mutableStateOf(false) }
+    var showAdvancedOptionsHint by remember { mutableStateOf(false) }
+    var advancedOperator by remember { mutableStateOf("≥") }
+    var advancedPeopleCountText by remember { mutableStateOf("") }
+    var advancedRoomFilterText by remember { mutableStateOf("") }
+    var advancedOperatorExpanded by remember { mutableStateOf(false) }
     val reservationResults = state.reservationResults
     var hasLoadedCache by state::hasLoadedCache
     var availableRooms by state::availableRooms
@@ -1197,10 +1299,10 @@ fun SearchAvailabilityScreen(
         val userStart = LocalDateTime.of(selectedDate, startTime)
         val userEnd = LocalDateTime.of(selectedDate, endTime)
         val trimmedFilterText = filterText.trim()
-        val queryFilter = parseQueryFilter(trimmedFilterText) ?: parseFreeTextQueryFilter(trimmedFilterText)
+        val queryFilters = parseQueryFilters(trimmedFilterText)
 
-        if (trimmedFilterText.isNotEmpty() && queryFilter == null) {
-            resultMessage = "筛选条件格式异常，支持示例：5、507、>=10"
+        if (trimmedFilterText.isNotEmpty() && queryFilters == null) {
+            resultMessage = "筛选条件格式异常，支持示例：5、507、A5、>=10、A5,>=10"
             availableRooms = emptyList()
             transitPlans = emptyList()
             return@runQuery
@@ -1209,7 +1311,7 @@ fun SearchAvailabilityScreen(
         val filteredRooms = rooms.filter { room ->
             selectedCampus == "全部" || room.campus() == selectedCampus
         }.filter { room ->
-            queryFilter?.matches(room) ?: true
+            queryFilters?.all { filter -> filter.matches(room) } ?: true
         }
 
         val free = filteredRooms.filter { room ->
@@ -1299,6 +1401,105 @@ fun SearchAvailabilityScreen(
             },
             dismissButton = {
                 Button(onClick = { showRefreshConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    if (showAdvancedOptionsHint) {
+        AlertDialog(
+            onDismissRequest = { showAdvancedOptionsHint = false },
+            title = { Text("高级筛选") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("设置人数筛选条件")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ExposedDropdownMenuBox(
+                            expanded = advancedOperatorExpanded,
+                            onExpandedChange = { advancedOperatorExpanded = !advancedOperatorExpanded },
+                            modifier = Modifier.width(132.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = advancedOperatorLabel(advancedOperator),
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("条件") },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = advancedOperatorExpanded)
+                                },
+                                modifier = Modifier.menuAnchor()
+                            )
+                            DropdownMenu(
+                                expanded = advancedOperatorExpanded,
+                                onDismissRequest = { advancedOperatorExpanded = false }
+                            ) {
+                                advancedOperatorOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.label) },
+                                        onClick = {
+                                            advancedOperator = option.symbol
+                                            advancedOperatorExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = advancedPeopleCountText,
+                            onValueChange = { input ->
+                                if (input.all { it.isDigit() }) {
+                                    advancedPeopleCountText = input
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("人数") },
+                            placeholder = { Text("输入人数") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+
+                    Text("设置楼层或房间号")
+                    OutlinedTextField(
+                        value = advancedRoomFilterText,
+                        onValueChange = { input ->
+                            if (input.all { it.isLetterOrDigit() }) {
+                                advancedRoomFilterText = input.uppercase()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("楼层/房间号") },
+                        placeholder = { Text("如 5 / 507 / A5") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val mergedCapacity = mergeCapacityFilter(
+                            input = filterText,
+                            operatorSymbol = advancedOperator,
+                            peopleCountText = advancedPeopleCountText
+                        )
+                        filterText = mergeTextFilter(
+                            input = mergedCapacity,
+                            text = advancedRoomFilterText
+                        )
+                        showAdvancedOptionsHint = false
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { showAdvancedOptionsHint = false }) {
                     Text("取消")
                 }
             }
@@ -1432,7 +1633,7 @@ fun SearchAvailabilityScreen(
                                     },
                                     modifier = Modifier.menuAnchor()
                                 )
-                                ExposedDropdownMenu(
+                                DropdownMenu(
                                     expanded = campusExpanded,
                                     onDismissRequest = { campusExpanded = false }
                                 ) {
@@ -1458,13 +1659,34 @@ fun SearchAvailabilityScreen(
                         }
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { enableTransit = !enableTransit },
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
-                            Text("搜索中转方案", fontSize = 12.sp)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { enableTransit = !enableTransit }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(checked = enableTransit, onCheckedChange = { enableTransit = it })
+                                Text("搜索中转方案", fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    val draft = readCapacityFilterDraft(filterText)
+                                    advancedOperator = draft?.operatorSymbol ?: "≥"
+                                    advancedPeopleCountText = draft?.peopleCountText.orEmpty()
+                                    advancedRoomFilterText = readTextFilterDraft(filterText).orEmpty()
+                                    advancedOperatorExpanded = false
+                                    showAdvancedOptionsHint = true
+                                }
+                            ) {
+                                Text("高级筛选")
+                            }
                         }
                     }
                 }
