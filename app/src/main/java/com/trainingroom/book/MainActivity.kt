@@ -1,5 +1,6 @@
 package com.trainingroom.book
 
+import android.app.Activity
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
@@ -8,8 +9,10 @@ import android.os.Bundle
 import android.os.Parcelable
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +34,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
@@ -121,6 +125,7 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthSessionManager.install(this)
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
@@ -433,6 +438,18 @@ data class RoomFetchResult(
     val rawJson: String?
 )
 
+data class UserCenterProfile(
+    val username: String,
+    val userCode: String? = null,
+    val userUnit: String? = null,
+    val userType: String? = null
+)
+
+data class UserCenterFetchResult(
+    val profile: UserCenterProfile? = null,
+    val message: String? = null
+)
+
 data class RoomsState(
     val categories: List<String>,
     val rooms: List<ConferenceRoom>,
@@ -440,6 +457,10 @@ data class RoomsState(
     val onRefresh: () -> Unit,
     val isRefreshing: Boolean
 )
+
+private const val USER_CENTER_URL = "https://weixinlib.lut.edu.cn/usercenter"
+private const val USER_CENTER_USER_AGENT =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
 
 fun parseConferenceRooms(json: String): List<ConferenceRoom> {
     return try {
@@ -509,6 +530,65 @@ suspend fun fetchConferenceRoomsFromWeb(): RoomFetchResult {
             RoomFetchResult(emptyList(), null)
         }
     }
+}
+
+suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
+    return withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        runCatching {
+            val rawCookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+            val connection = (URL(USER_CENTER_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", USER_CENTER_USER_AGENT)
+                rawCookieHeader?.let { setRequestProperty("Cookie", it) }
+                setRequestProperty("Referer", "https://weixinlib.lut.edu.cn/")
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val finalUrl = connection.url.toString()
+            val profile = parseUserCenterProfile(body)
+            when {
+                profile != null -> UserCenterFetchResult(profile = profile)
+                "cas/login" in finalUrl || "统一身份认证" in body -> {
+                    UserCenterFetchResult(message = "当前登录态已失效，请重新登录")
+                }
+                else -> UserCenterFetchResult(message = "已请求 usercenter，但未解析到用户名")
+            }
+        }.getOrElse { error ->
+            Log.e("MainActivity", "获取 usercenter 失败: ${error.message}", error)
+            UserCenterFetchResult(message = error.message ?: "获取个人中心失败")
+        }
+    }
+}
+
+private fun parseUserCenterProfile(html: String): UserCenterProfile? {
+    val rawUsername = listOf(
+        Regex("""<p[^>]*>\s*欢迎您:([^<]+)<a\s+href="unlogin">"""),
+        Regex("""id="username"[^>]*value="([^"]+)"""")
+    ).asSequence()
+        .mapNotNull { regex -> regex.find(html)?.groupValues?.getOrNull(1)?.trim() }
+        .firstOrNull()
+        ?: return null
+
+    val username = rawUsername.removePrefix("欢迎您:").trim()
+    if (username.isBlank()) return null
+
+    fun readValue(fieldId: String): String? =
+        Regex("""id="$fieldId"[^>]*value="([^"]*)"""")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.ifBlank { null }
+
+    return UserCenterProfile(
+        username = username,
+        userCode = readValue("usercode"),
+        userUnit = readValue("userunit"),
+        userType = readValue("usertype")
+    )
 }
 
 fun extractRoomJsonFromHtml(html: String): String? {
@@ -856,6 +936,7 @@ fun HomeScreen() {
     val context = LocalContext.current
     var selectedCategoryIndex by remember { mutableIntStateOf(0) }
     var selectedNavItem by remember { mutableIntStateOf(0) }
+    var userCenterRefreshKey by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(true) }
     val roomsState = rememberConferenceRooms()
     val categories = roomsState.categories
@@ -877,6 +958,13 @@ fun HomeScreen() {
                 offlineNotice?.let { putExtra(RoomDetailActivity.EXTRA_OFFLINE_NOTICE, it) }
             }
             context.startActivity(intent)
+        }
+    }
+    val loginLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            userCenterRefreshKey += 1
         }
     }
     val topBarTitle = when (selectedNavItem) {
@@ -926,7 +1014,12 @@ fun HomeScreen() {
         bottomBar = {
             BottomNavigationBar(
                 selectedItem = selectedNavItem,
-                onItemSelected = { selectedNavItem = it }
+                onItemSelected = {
+                    selectedNavItem = it
+                    if (it == 3) {
+                        userCenterRefreshKey += 1
+                    }
+                }
             )
         },
         modifier = Modifier.fillMaxSize()
@@ -1009,15 +1102,309 @@ fun HomeScreen() {
                         onRoomSelected = openRoomDetail
                     )
                 }
+                2 -> {
+                    FeaturePlaceholderScreen(
+                        title = "我的预约",
+                        description = "后续会在这里展示登录后的预约记录、签到状态和取消入口。"
+                    )
+                }
+                3 -> {
+                    PersonalCenterPlaceholderScreen(
+                        refreshKey = userCenterRefreshKey,
+                        onOpenLogin = { initialTab ->
+                            loginLauncher.launch(LoginActivity.createIntent(context, initialTab))
+                        }
+                    )
+                }
                 else -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("功能开发中……", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    FeaturePlaceholderScreen(
+                        title = "功能开发中",
+                        description = "当前页面还未开放。"
+                    )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FeaturePlaceholderScreen(
+    title: String,
+    description: String
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PersonalCenterPlaceholderScreen(
+    refreshKey: Int,
+    onOpenLogin: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    val quickActions = listOf(
+        "我的预约" to "登录后同步个人预约记录与状态",
+        "常用房间" to "后续可保存常看的研讨室",
+        "消息通知" to "预留预约提醒和变更通知入口"
+    )
+
+    val profileServices = listOf(
+        "账号与安全" to "预留手机号、统一认证和退出登录",
+        "资料编辑" to "后续可维护昵称、头像与学院信息",
+        "帮助与反馈" to "收纳常见问题和问题反馈入口"
+    )
+    var isLoading by remember(refreshKey) { mutableStateOf(true) }
+    var profile by remember(refreshKey) { mutableStateOf<UserCenterProfile?>(null) }
+    var message by remember(refreshKey) { mutableStateOf<String?>(null) }
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+
+    LaunchedEffect(refreshKey) {
+        isLoading = true
+        val result = fetchUserCenterProfile(context)
+        profile = result.profile
+        message = result.message
+        isLoading = false
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "用户头像占位",
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = when {
+                                isLoading -> "正在同步个人中心"
+                                profile != null -> profile?.username.orEmpty()
+                                else -> "未登录"
+                            },
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = when {
+                                isLoading -> "正在带着当前会话访问 usercenter 并读取用户名。"
+                                profile != null -> listOfNotNull(
+                                    profile?.userCode?.let { "证号 $it" },
+                                    profile?.userUnit,
+                                    profile?.userType
+                                ).joinToString(" · ").ifBlank { "已成功获取个人中心用户名" }
+                                else -> message ?: "登录后可查看个人预约、消息通知和资料信息。"
+                            },
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (profile == null) {
+                            onOpenLogin(LoginActivity.TAB_LIBRARY)
+                        } else {
+                            showLogoutConfirm = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        when {
+                            isLoading -> "同步中"
+                            profile != null -> "退出登录"
+                            else -> "登录"
+                        }
+                    )
+                }
+            }
+        }
+
+        if (showLogoutConfirm) {
+            AlertDialog(
+                onDismissRequest = { showLogoutConfirm = false },
+                title = { Text("退出登录") },
+                text = { Text("确认退出当前登录状态？") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            AuthSessionManager.clear(context)
+                            showLogoutConfirm = false
+                            profile = null
+                            message = "已退出登录"
+                            isLoading = false
+                        }
+                    ) {
+                        Text("退出登录")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showLogoutConfirm = false }) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "登录后能力",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                quickActions.forEach { (title, subtitle) ->
+                    ProfileMenuCard(
+                        title = title,
+                        subtitle = subtitle
+                    )
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "个人中心模块",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                profileServices.forEach { (title, subtitle) ->
+                    ProfileMenuCard(
+                        title = title,
+                        subtitle = subtitle
+                    )
+                }
+
+                Text(
+                    text = "以上按钮与卡片当前仅做界面预留，后续接入登录态和接口即可直接挂载业务。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileMenuCard(
+    title: String,
+    subtitle: String
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = {}),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = null,
+                modifier = Modifier.rotate(180f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -1979,7 +2366,7 @@ private fun AdvancedFilterDialog(
         onDismissRequest = onDismissRequest,
         title = { Text("高级筛选") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("设置人数筛选条件")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
