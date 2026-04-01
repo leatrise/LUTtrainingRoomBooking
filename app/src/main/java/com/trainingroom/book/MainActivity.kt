@@ -1036,7 +1036,7 @@ fun HomeScreen() {
                 selectedItem = selectedNavItem,
                 onItemSelected = {
                     selectedNavItem = it
-                    if (it == 3) {
+                    if (it == 2 || it == 3) {
                         userCenterRefreshKey += 1
                     }
                 }
@@ -1123,9 +1123,11 @@ fun HomeScreen() {
                     )
                 }
                 2 -> {
-                    FeaturePlaceholderScreen(
-                        title = "我的预约",
-                        description = "后续会在这里展示登录后的预约记录、签到状态和取消入口。"
+                    MyReservationsScreen(
+                        refreshKey = userCenterRefreshKey,
+                        onOpenLogin = { initialTab ->
+                            loginLauncher.launch(LoginActivity.createIntent(context, initialTab))
+                        }
                     )
                 }
                 3 -> {
