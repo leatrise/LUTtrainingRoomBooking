@@ -14,7 +14,11 @@ object AuthSessionManager {
     private const val KEY_COOKIES = "cookies"
     private const val KEY_LAST_USER_CENTER_URL = "last_user_center_url"
     private const val KEY_WEIXINLIB_COOKIE_HEADER = "weixinlib_cookie_header"
+    private const val KEY_LOGIN_SOURCE = "login_source"
     private const val WEIXINLIB_DOMAIN = "weixinlib.lut.edu.cn"
+
+    const val LOGIN_SOURCE_SSO = "sso"
+    const val LOGIN_SOURCE_COOKIE = "cookie"
 
     private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
     private var installed = false
@@ -27,11 +31,39 @@ object AuthSessionManager {
         }
     }
 
-    fun markLoggedIn(context: Context, userCenterUrl: String) {
+    fun markLoggedIn(
+        context: Context,
+        userCenterUrl: String,
+        loginSource: String = LOGIN_SOURCE_SSO
+    ) {
         persistCookies(context)
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_LAST_USER_CENTER_URL, userCenterUrl)
+            .putString(KEY_LOGIN_SOURCE, loginSource)
+            .apply()
+        if (loginSource != LOGIN_SOURCE_COOKIE) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_WEIXINLIB_COOKIE_HEADER)
+                .apply()
+        }
+    }
+
+    fun loginSource(context: Context): String? =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_LOGIN_SOURCE, null)
+
+    fun isSsoLogin(context: Context): Boolean =
+        loginSource(context) == LOGIN_SOURCE_SSO
+
+    fun isCookieLogin(context: Context): Boolean =
+        loginSource(context) == LOGIN_SOURCE_COOKIE
+
+    fun clearWeixinlibCookieHeader(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .remove(KEY_WEIXINLIB_COOKIE_HEADER)
             .apply()
     }
 
@@ -46,6 +78,7 @@ object AuthSessionManager {
             .remove(KEY_COOKIES)
             .remove(KEY_LAST_USER_CENTER_URL)
             .remove(KEY_WEIXINLIB_COOKIE_HEADER)
+            .remove(KEY_LOGIN_SOURCE)
             .apply()
     }
 
@@ -81,6 +114,7 @@ object AuthSessionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_WEIXINLIB_COOKIE_HEADER, normalizedHeader)
+            .putString(KEY_LOGIN_SOURCE, LOGIN_SOURCE_COOKIE)
             .apply()
         persistCookies(context)
         return importedCookies.size

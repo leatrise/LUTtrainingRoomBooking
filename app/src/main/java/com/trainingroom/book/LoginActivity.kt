@@ -158,30 +158,6 @@ fun LoginScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "登录入口",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = "使用顶部 dock 栏切换登录方式。当前界面只预留交互结构，后续可直接接入真实认证流程。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                    )
-                }
-            }
 
             LoginTopDockBar(
                 selectedTab = selectedTab,
@@ -444,7 +420,8 @@ private fun CookieLoginPanel(
                         if (result.profile != null) {
                             AuthSessionManager.markLoggedIn(
                                 context = context,
-                                userCenterUrl = "https://weixinlib.lut.edu.cn/usercenter"
+                                userCenterUrl = "https://weixinlib.lut.edu.cn/usercenter",
+                                loginSource = AuthSessionManager.LOGIN_SOURCE_COOKIE
                             )
                             resultMessage = "Cookie 登录成功，当前用户：${result.profile.username}"
                             Toast.makeText(context, resultMessage, Toast.LENGTH_SHORT).show()

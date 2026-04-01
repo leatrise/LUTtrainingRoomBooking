@@ -533,6 +533,26 @@ suspend fun fetchConferenceRoomsFromWeb(): RoomFetchResult {
 }
 
 suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
+    val firstAttempt = fetchUserCenterProfileOnce(context)
+    if (firstAttempt.profile != null) {
+        return firstAttempt
+    }
+
+    val shouldTrySilentRefresh =
+        firstAttempt.message == "当前登录态已失效，请重新登录" &&
+            AuthSessionManager.isSsoLogin(context)
+    if (!shouldTrySilentRefresh) {
+        return firstAttempt
+    }
+
+    val renewResult = SsoLoginService.trySilentRefresh(context)
+    if (!renewResult.success) {
+        return UserCenterFetchResult(message = renewResult.message)
+    }
+    return fetchUserCenterProfileOnce(context)
+}
+
+private suspend fun fetchUserCenterProfileOnce(context: Context): UserCenterFetchResult {
     return withContext(Dispatchers.IO) {
         AuthSessionManager.install(context)
         runCatching {

@@ -140,6 +140,60 @@ object SsoLoginService {
         }
     }
 
+    suspend fun trySilentRefresh(
+        context: Context,
+        loginUrl: String = DEFAULT_SSO_LOGIN_URL
+    ): SsoLoginResult = withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        runCatching {
+            Log.d(TAG, "开始静默续登")
+            val entryResult = httpGet(
+                url = loginUrl,
+                referer = "https://weixinlib.lut.edu.cn/"
+            )
+            val finalResult = if (entryResult.location != null) {
+                followRedirects(entryResult, maxSteps = 8)
+            } else {
+                entryResult
+            }
+            val finalUrl = finalResult.url
+            Log.d(TAG, "静默续登结束, code=${finalResult.code}, finalUrl=$finalUrl")
+            when {
+                finalResult.code == 200 && "/usercenter" in finalUrl -> {
+                    AuthSessionManager.clearWeixinlibCookieHeader(context)
+                    AuthSessionManager.markLoggedIn(
+                        context = context,
+                        userCenterUrl = finalUrl,
+                        loginSource = AuthSessionManager.LOGIN_SOURCE_SSO
+                    )
+                    SsoLoginResult(
+                        success = true,
+                        message = "已使用统一认证会话恢复图书馆登录态",
+                        userCenterUrl = finalUrl
+                    )
+                }
+                "cas/login" in finalUrl || "统一身份认证" in finalResult.body -> {
+                    SsoLoginResult(
+                        success = false,
+                        message = "统一认证主登录态已失效，请重新登录"
+                    )
+                }
+                else -> {
+                    SsoLoginResult(
+                        success = false,
+                        message = "静默续登未到达用户中心，当前停留在: $finalUrl"
+                    )
+                }
+            }
+        }.getOrElse { error ->
+            Log.e(TAG, "静默续登异常: ${error.message}", error)
+            SsoLoginResult(
+                success = false,
+                message = decodeUnicodeEscapes(error.message ?: "静默续登失败")
+            )
+        }
+    }
+
     private fun followRedirects(initial: HttpResult, maxSteps: Int): HttpResult {
         var current = initial
         repeat(maxSteps) {
