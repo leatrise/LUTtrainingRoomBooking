@@ -143,8 +143,9 @@ private suspend fun fetchMyTrainingReservationsOnce(
         AuthSessionManager.install(context)
         runCatching {
             val cookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+            val pagerOffset = pageNo.coerceAtLeast(0) * pageSize.coerceAtLeast(1)
             val url = URL(
-                "$MY_TRAINING_HISTORY_URL?begintime=$beginDate&endtime=$endDate&pageNo=$pageNo&pageSize=$pageSize"
+                "$MY_TRAINING_HISTORY_URL?pageSize=$pageSize&pageNumber=1&begintime=$beginDate&endtime=$endDate&pager.offset=$pagerOffset"
             )
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
