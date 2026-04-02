@@ -59,6 +59,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Checkbox
@@ -1497,7 +1498,7 @@ class SearchAvailabilityState {
 @Composable
 fun rememberSearchAvailabilityState(): SearchAvailabilityState = remember { SearchAvailabilityState() }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SearchAvailabilityScreen(
     rooms: List<ConferenceRoom>,
@@ -2194,6 +2195,18 @@ fun SearchAvailabilityScreen(
                 }
 
                 val statusInteractionSource = remember { MutableInteractionSource() }
+                if (isFetchingRooms) {
+                    LinearWavyProgressIndicator(
+                        progress = {
+                            if (state.totalRooms > 0) {
+                                ongoing.toFloat() / state.totalRooms.toFloat()
+                            } else {
+                                0f
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Text(
                     text = statusText,
                     color = run {
