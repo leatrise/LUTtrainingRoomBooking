@@ -29,10 +29,11 @@ import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -111,7 +112,7 @@ private val loginDockItems = listOf(
     LoginDockItem(title = "Cookie", icon = Icons.Filled.VpnKey)
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LoginScreen(
     initialTab: Int,
@@ -234,6 +235,7 @@ private fun LoginTopDockBar(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SsoLoginPanel(
     onLoginSuccess: () -> Unit
@@ -294,9 +296,8 @@ private fun SsoLoginPanel(
                 modifier = Modifier.weight(1f)
             ) {
                 if (isSubmitting) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
@@ -372,6 +373,7 @@ private fun LibraryLoginPanel() {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun CookieLoginPanel(
     onLoginSuccess: () -> Unit
@@ -434,9 +436,8 @@ private fun CookieLoginPanel(
                 modifier = Modifier.weight(1f)
             ) {
                 if (isSubmitting) {
-                    CircularProgressIndicator(
+                    LoadingIndicator(
                         modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
