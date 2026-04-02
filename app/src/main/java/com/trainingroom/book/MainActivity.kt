@@ -1,8 +1,6 @@
 package com.trainingroom.book
 
 import android.app.Activity
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -56,6 +54,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,12 +69,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -1551,42 +1554,110 @@ fun SearchAvailabilityScreen(
     var endTimeText by remember { mutableStateOf(endTime.format(timeFormatter)) }
     val campusOptions = listOf("全部", "彭家坪校区", "兰工坪校区")
     var campusExpanded by remember { mutableStateOf(false) }
+    var showDatePickerDialog by remember { mutableStateOf(false) }
+    var showStartTimePickerDialog by remember { mutableStateOf(false) }
+    var showEndTimePickerDialog by remember { mutableStateOf(false) }
+    val zoneId = remember { ZoneId.systemDefault() }
 
-    val openDatePicker = {
+    if (showDatePickerDialog) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDate
+                .atStartOfDay(zoneId)
+                .toInstant()
+                .toEpochMilli()
+        )
         DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
-                dateText = selectedDate.format(dateFormatter)
+            onDismissRequest = { showDatePickerDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val millis = datePickerState.selectedDateMillis
+                        if (millis != null) {
+                            selectedDate = Instant.ofEpochMilli(millis)
+                                .atZone(zoneId)
+                                .toLocalDate()
+                            dateText = selectedDate.format(dateFormatter)
+                        }
+                        showDatePickerDialog = false
+                    }
+                ) {
+                    Text("确定")
+                }
             },
-            selectedDate.year,
-            selectedDate.monthValue - 1,
-            selectedDate.dayOfMonth
-        ).show()
+            dismissButton = {
+                OutlinedButton(onClick = { showDatePickerDialog = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
-    val openStartTimePicker = {
-        TimePickerDialog(
-            context,
-            { _, hour: Int, minute: Int ->
-                startTime = LocalTime.of(hour, minute)
-                startTimeText = startTime.format(timeFormatter)
+
+    if (showStartTimePickerDialog) {
+        val startTimePickerState = rememberTimePickerState(
+            initialHour = startTime.hour,
+            initialMinute = startTime.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showStartTimePickerDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        startTime = LocalTime.of(
+                            startTimePickerState.hour,
+                            startTimePickerState.minute
+                        )
+                        startTimeText = startTime.format(timeFormatter)
+                        showStartTimePickerDialog = false
+                    }
+                ) {
+                    Text("确定")
+                }
             },
-            startTime.hour,
-            startTime.minute,
-            true
-        ).show()
+            dismissButton = {
+                OutlinedButton(onClick = { showStartTimePickerDialog = false }) {
+                    Text("取消")
+                }
+            },
+            text = {
+                TimePicker(state = startTimePickerState)
+            }
+        )
     }
-    val openEndTimePicker = {
-        TimePickerDialog(
-            context,
-            { _, hour: Int, minute: Int ->
-                endTime = LocalTime.of(hour, minute)
-                endTimeText = endTime.format(timeFormatter)
+
+    if (showEndTimePickerDialog) {
+        val endTimePickerState = rememberTimePickerState(
+            initialHour = endTime.hour,
+            initialMinute = endTime.minute,
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showEndTimePickerDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        endTime = LocalTime.of(
+                            endTimePickerState.hour,
+                            endTimePickerState.minute
+                        )
+                        endTimeText = endTime.format(timeFormatter)
+                        showEndTimePickerDialog = false
+                    }
+                ) {
+                    Text("确定")
+                }
             },
-            endTime.hour,
-            endTime.minute,
-            true
-        ).show()
+            dismissButton = {
+                OutlinedButton(onClick = { showEndTimePickerDialog = false }) {
+                    Text("取消")
+                }
+            },
+            text = {
+                TimePicker(state = endTimePickerState)
+            }
+        )
     }
 
     val scrollState = rememberScrollState()
@@ -1899,11 +1970,11 @@ fun SearchAvailabilityScreen(
                             .clickable(
                                 interactionSource = dateInteractionSource,
                                 indication = null
-                            ) { openDatePicker() },
+                            ) { showDatePickerDialog = true },
                         label = { Text("日期") },
                         placeholder = { Text("选择日期") },
                         trailingIcon = {
-                            IconButton(onClick = { openDatePicker() }) {
+                            IconButton(onClick = { showDatePickerDialog = true }) {
                                 Icon(Icons.Filled.CalendarMonth, contentDescription = "选择日期")
                             }
                         }
@@ -1927,11 +1998,11 @@ fun SearchAvailabilityScreen(
                                 .clickable(
                                     interactionSource = startInteractionSource,
                                     indication = null
-                                ) { openStartTimePicker() },
+                                ) { showStartTimePickerDialog = true },
                             label = { Text("开始时间") },
                             placeholder = { Text("如 09:00") },
                             trailingIcon = {
-                                IconButton(onClick = { openStartTimePicker() }) {
+                                IconButton(onClick = { showStartTimePickerDialog = true }) {
                                     Icon(Icons.Filled.AccessTime, contentDescription = "选择开始时间")
                                 }
                             }
@@ -1948,11 +2019,11 @@ fun SearchAvailabilityScreen(
                                 .clickable(
                                     interactionSource = endInteractionSource,
                                     indication = null
-                                ) { openEndTimePicker() },
+                                ) { showEndTimePickerDialog = true },
                             label = { Text("结束时间") },
                             placeholder = { Text("如 11:00") },
                             trailingIcon = {
-                                IconButton(onClick = { openEndTimePicker() }) {
+                                IconButton(onClick = { showEndTimePickerDialog = true }) {
                                     Icon(Icons.Filled.AccessTime, contentDescription = "选择结束时间")
                                 }
                             }

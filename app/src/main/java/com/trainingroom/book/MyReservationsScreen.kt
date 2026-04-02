@@ -1,6 +1,5 @@
 package com.trainingroom.book
 
-import android.app.DatePickerDialog
 import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -16,8 +15,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +45,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private const val MY_TRAINING_HISTORY_URL = "https://weixinlib.lut.edu.cn/moretraingroombesklog"
@@ -69,6 +78,28 @@ data class MyTrainingReservationFetchResult(
     val message: String? = null
 )
 
+enum class ReservationDatePreset(val label: String, val monthCount: Long?) {
+    LAST_MONTH("最近一个月", 1),
+    LAST_THREE_MONTHS("最近三个月", 3),
+    LAST_HALF_YEAR("最近半年", 6),
+    CUSTOM("自定义", null)
+}
+
+private val reservationDatePresetOptions = listOf(
+    ReservationDatePreset.LAST_MONTH,
+    ReservationDatePreset.LAST_THREE_MONTHS,
+    ReservationDatePreset.LAST_HALF_YEAR,
+    ReservationDatePreset.CUSTOM
+)
+
+private fun dateRangeForPreset(
+    preset: ReservationDatePreset,
+    baseDate: LocalDate = LocalDate.now()
+): Pair<LocalDate, LocalDate> {
+    val monthCount = preset.monthCount ?: return baseDate to baseDate
+    return baseDate.minusMonths(monthCount) to baseDate
+}
+
 class MyTrainingReservationsState {
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -81,6 +112,8 @@ class MyTrainingReservationsState {
     var isLoading by mutableStateOf(false)
     var isAppending by mutableStateOf(false)
     var canLoadMore by mutableStateOf(true)
+    var hasQueried by mutableStateOf(false)
+    var selectedPreset by mutableStateOf(ReservationDatePreset.LAST_HALF_YEAR)
     var message by mutableStateOf<String?>(null)
 
     fun beginDateText(): String = beginDate.format(dateFormatter)
@@ -273,6 +306,7 @@ private fun parseFlexibleDate(raw: String): LocalDate? {
     }.getOrNull()
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyReservationsScreen(
     refreshKey: Int,
@@ -281,6 +315,7 @@ fun MyReservationsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val zoneId = remember { ZoneId.systemDefault() }
 
     fun requestPage(targetPageNo: Int, append: Boolean) {
         if (state.beginDate.isAfter(state.endDate)) {
@@ -288,6 +323,9 @@ fun MyReservationsScreen(
             return
         }
         if (state.isLoading || state.isAppending) return
+        if (!append) {
+            state.hasQueried = true
+        }
         scope.launch {
             if (append) {
                 state.isAppending = true
@@ -355,34 +393,95 @@ fun MyReservationsScreen(
         if (!state.hasMore()) return
         requestPage(targetPageNo = state.pageNo + 1, append = true)
     }
-
-    LaunchedEffect(refreshKey) {
-        reloadFromFirstPage()
-    }
     val showLoginButton = state.message?.contains("登录") == true
+    var presetExpanded by remember { mutableStateOf(false) }
+    var showBeginDatePickerDialog by remember { mutableStateOf(false) }
+    var showEndDatePickerDialog by remember { mutableStateOf(false) }
+
+    fun applyPreset(preset: ReservationDatePreset) {
+        state.selectedPreset = preset
+        if (preset == ReservationDatePreset.CUSTOM) return
+        val (beginDate, endDate) = dateRangeForPreset(preset)
+        state.beginDate = beginDate
+        state.endDate = endDate
+    }
 
     fun openBeginDatePicker() {
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                state.beginDate = LocalDate.of(year, month + 1, dayOfMonth)
-            },
-            state.beginDate.year,
-            state.beginDate.monthValue - 1,
-            state.beginDate.dayOfMonth
-        ).show()
+        showBeginDatePickerDialog = true
     }
 
     fun openEndDatePicker() {
+        showEndDatePickerDialog = true
+    }
+
+    if (showBeginDatePickerDialog) {
+        val beginDatePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = state.beginDate
+                .atStartOfDay(zoneId)
+                .toInstant()
+                .toEpochMilli()
+        )
         DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                state.endDate = LocalDate.of(year, month + 1, dayOfMonth)
+            onDismissRequest = { showBeginDatePickerDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val millis = beginDatePickerState.selectedDateMillis
+                        if (millis != null) {
+                            state.beginDate = Instant.ofEpochMilli(millis)
+                                .atZone(zoneId)
+                                .toLocalDate()
+                            state.selectedPreset = ReservationDatePreset.CUSTOM
+                        }
+                        showBeginDatePickerDialog = false
+                    }
+                ) {
+                    Text("确定")
+                }
             },
-            state.endDate.year,
-            state.endDate.monthValue - 1,
-            state.endDate.dayOfMonth
-        ).show()
+            dismissButton = {
+                OutlinedButton(onClick = { showBeginDatePickerDialog = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = beginDatePickerState)
+        }
+    }
+
+    if (showEndDatePickerDialog) {
+        val endDatePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = state.endDate
+                .atStartOfDay(zoneId)
+                .toInstant()
+                .toEpochMilli()
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePickerDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val millis = endDatePickerState.selectedDateMillis
+                        if (millis != null) {
+                            state.endDate = Instant.ofEpochMilli(millis)
+                                .atZone(zoneId)
+                                .toLocalDate()
+                            state.selectedPreset = ReservationDatePreset.CUSTOM
+                        }
+                        showEndDatePickerDialog = false
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showEndDatePickerDialog = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = endDatePickerState)
+        }
     }
 
     LazyColumn(
@@ -407,6 +506,38 @@ fun MyReservationsScreen(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    ExposedDropdownMenuBox(
+                        expanded = presetExpanded,
+                        onExpandedChange = { presetExpanded = !presetExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = state.selectedPreset.label,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("时间范围") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetExpanded)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            enabled = !state.isLoading && !state.isAppending
+                        )
+                        DropdownMenu(
+                            expanded = presetExpanded,
+                            onDismissRequest = { presetExpanded = false }
+                        ) {
+                            reservationDatePresetOptions.forEach { preset ->
+                                DropdownMenuItem(
+                                    text = { Text(preset.label) },
+                                    onClick = {
+                                        presetExpanded = false
+                                        applyPreset(preset)
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -436,11 +567,13 @@ fun MyReservationsScreen(
                             Text("查询")
                         }
                     }
-                    Text(
-                        text = "该时间段共有 ${state.totalCount} 条数据",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (state.hasQueried) {
+                        Text(
+                            text = "该时间段共有 ${state.totalCount} 条数据",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -509,6 +642,26 @@ fun MyReservationsScreen(
                             Text(
                                 text = state.message.orEmpty(),
                                 modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+            !state.hasQueried -> {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "请选择时间范围后点击查询",
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
