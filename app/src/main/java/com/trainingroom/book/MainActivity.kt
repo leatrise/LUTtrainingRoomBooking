@@ -1138,6 +1138,10 @@ fun HomeScreen() {
                         refreshKey = userCenterRefreshKey,
                         onOpenLogin = { initialTab ->
                             loginLauncher.launch(LoginActivity.createIntent(context, initialTab))
+                        },
+                        onNavigateToReservations = {
+                            selectedNavItem = 2
+                            userCenterRefreshKey += 1
                         }
                     )
                 }
@@ -1185,19 +1189,18 @@ private fun FeaturePlaceholderScreen(
 @Composable
 private fun PersonalCenterPlaceholderScreen(
     refreshKey: Int,
-    onOpenLogin: (Int) -> Unit
+    onOpenLogin: (Int) -> Unit,
+    onNavigateToReservations: () -> Unit
 ) {
     val context = LocalContext.current
     val quickActions = listOf(
         "我的预约" to "登录后同步个人预约记录与状态",
-        "常用房间" to "后续可保存常看的研讨室",
-        "消息通知" to "预留预约提醒和变更通知入口"
+        "常用房间" to "后续可保存常看的研讨室"
     )
 
     val profileServices = listOf(
-        "账号与安全" to "预留手机号、统一认证和退出登录",
-        "资料编辑" to "后续可维护昵称、头像与学院信息",
-        "帮助与反馈" to "收纳常见问题和问题反馈入口"
+        "我的卡片" to "后续可展示借阅证与相关身份信息",
+        "设置" to "后续可管理应用偏好与通用配置"
     )
     var isLoading by remember(refreshKey) { mutableStateOf(true) }
     var profile by remember(refreshKey) { mutableStateOf<UserCenterProfile?>(null) }
@@ -1272,7 +1275,7 @@ private fun PersonalCenterPlaceholderScreen(
                                     profile?.userUnit,
                                     profile?.userType
                                 ).joinToString(" · ").ifBlank { "已成功获取个人中心用户名" }
-                                else -> message ?: "登录后可查看个人预约、消息通知和资料信息。"
+                                else -> message ?: "登录后可查看个人预约、常用房间、我的卡片和设置。"
                             },
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
@@ -1338,7 +1341,7 @@ private fun PersonalCenterPlaceholderScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "登录后能力",
+                    text = "个人中心",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -1347,28 +1350,14 @@ private fun PersonalCenterPlaceholderScreen(
                 quickActions.forEach { (title, subtitle) ->
                     ProfileMenuCard(
                         title = title,
-                        subtitle = subtitle
+                        subtitle = subtitle,
+                        onClick = {
+                            if (title == "我的预约") {
+                                onNavigateToReservations()
+                            }
+                        }
                     )
                 }
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "个人中心模块",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
 
                 profileServices.forEach { (title, subtitle) ->
                     ProfileMenuCard(
@@ -1376,12 +1365,6 @@ private fun PersonalCenterPlaceholderScreen(
                         subtitle = subtitle
                     )
                 }
-
-                Text(
-                    text = "以上按钮与卡片当前仅做界面预留，后续接入登录态和接口即可直接挂载业务。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -1390,13 +1373,14 @@ private fun PersonalCenterPlaceholderScreen(
 @Composable
 private fun ProfileMenuCard(
     title: String,
-    subtitle: String
+    subtitle: String,
+    onClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = {}),
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
