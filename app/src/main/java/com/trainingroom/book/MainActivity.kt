@@ -1147,6 +1147,9 @@ fun HomeScreen() {
                         onNavigateToReservations = {
                             selectedNavItem = 2
                             userCenterRefreshKey += 1
+                        },
+                        onNavigateToCards = {
+                            context.startActivity(MyCardsActivity.createIntent(context))
                         }
                     )
                 }
@@ -1195,7 +1198,8 @@ private fun FeaturePlaceholderScreen(
 private fun PersonalCenterPlaceholderScreen(
     refreshKey: Int,
     onOpenLogin: (Int) -> Unit,
-    onNavigateToReservations: () -> Unit
+    onNavigateToReservations: () -> Unit,
+    onNavigateToCards: () -> Unit
 ) {
     val context = LocalContext.current
     val quickActions = listOf(
@@ -1204,7 +1208,7 @@ private fun PersonalCenterPlaceholderScreen(
     )
 
     val profileServices = listOf(
-        "我的卡片" to "后续可展示借阅证与相关身份信息",
+        "我的卡片" to "这里可以添加与管理您常用的卡片信息",
         "设置" to "后续可管理应用偏好与通用配置"
     )
     var isLoading by remember(refreshKey) { mutableStateOf(true) }
@@ -1367,7 +1371,12 @@ private fun PersonalCenterPlaceholderScreen(
                 profileServices.forEach { (title, subtitle) ->
                     ProfileMenuCard(
                         title = title,
-                        subtitle = subtitle
+                        subtitle = subtitle,
+                        onClick = {
+                            if (title == "我的卡片") {
+                                onNavigateToCards()
+                            }
+                        }
                     )
                 }
             }
