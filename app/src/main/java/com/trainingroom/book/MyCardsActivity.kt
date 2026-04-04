@@ -311,7 +311,7 @@ private fun MyCardsScreen(
                             note = card.note
                             saveMessage = null
                             saveTone = NoticeTone.Success
-                            lookupMessage = "离开学号输入框后可重新验证姓名。"
+                            lookupMessage = "学号输入完成后会自动尝试查找姓名。"
                             lookupTone = NoticeTone.Info
                             autoFilledStudentId = card.studentId
                             requestedLookupStudentId = null
@@ -523,7 +523,7 @@ private fun CardEditorSheet(
                 .fillMaxWidth()
                 .onFocusChanged { onStudentIdFocusChanged(it.isFocused) },
             singleLine = true,
-            label = { Text("学号") },
+            label = { Text("*学号") },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                 keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Next
@@ -535,7 +535,7 @@ private fun CardEditorSheet(
             onValueChange = onNameChange,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("姓名") },
+            label = { Text("*姓名") },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                 imeAction = ImeAction.Next
             )
@@ -695,9 +695,6 @@ private fun SavedCardItem(
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (!showNameSubtitle) {
-                CardField(label = "姓名", value = card.name)
-            }
         }
     }
 }
