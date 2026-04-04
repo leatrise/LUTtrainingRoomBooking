@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -53,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -258,7 +261,10 @@ private fun SsoLoginPanel(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("统一认证账号") },
             placeholder = { Text("输入学号/工号") },
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Next
+            )
         )
         OutlinedTextField(
             value = password,
@@ -267,6 +273,11 @@ private fun SsoLoginPanel(
             label = { Text("统一认证密码") },
             placeholder = { Text("输入登录密码") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Done
+            ),
             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation()
         )
         Row(
@@ -342,7 +353,10 @@ private fun LibraryLoginPanel() {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("图书馆号") },
             placeholder = { Text("输入图书馆号") },
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                imeAction = ImeAction.Next
+            )
         )
         OutlinedTextField(
             value = password,
@@ -351,6 +365,11 @@ private fun LibraryLoginPanel() {
             label = { Text("密码") },
             placeholder = { Text("输入登录密码") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Done
+            ),
             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation()
         )
         Row(
