@@ -1,5 +1,7 @@
 package com.trainingroom.book
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -24,9 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCard
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -55,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -98,20 +104,36 @@ class MyCardsActivity : ComponentActivity() {
 private data class SavedCard(
     val studentId: String,
     val name: String,
-    val note: String
+    val note: String,
+    val verificationStatus: CardVerificationStatus
 )
 
 private val previewSavedCards = listOf(
     SavedCard(
         studentId = "202300101",
         name = "张三",
-        note = "训练室常用卡"
+        note = "训练室常用卡",
+        verificationStatus = CardVerificationStatus.Verified
     ),
     SavedCard(
         studentId = "202600401",
         name = "李四",
-        note = ""
+        note = "",
+        verificationStatus = CardVerificationStatus.OfflineUnverified
     )
+)
+
+private enum class CardVerificationStatus {
+    Verified,
+    OfflineUnverified,
+    Failed
+}
+
+private data class VerificationBadgeStyle(
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val containerColor: androidx.compose.ui.graphics.Color,
+    val contentColor: androidx.compose.ui.graphics.Color
 )
 
 private enum class CardLookupStatus {
@@ -163,6 +185,9 @@ private fun MyCardsScreen(
     var saveMessage by remember { mutableStateOf<String?>(null) }
     var saveTone by remember { mutableStateOf(NoticeTone.Success) }
     var autoFilledStudentId by remember { mutableStateOf<String?>(null) }
+    var currentVerificationStatus by remember {
+        mutableStateOf(defaultDraftVerificationStatus(context))
+    }
     var studentIdHasFocus by remember { mutableStateOf(false) }
     var requestedLookupStudentId by remember { mutableStateOf<String?>(null) }
     var lookupRequestVersion by remember { mutableStateOf(0) }
@@ -178,6 +203,7 @@ private fun MyCardsScreen(
         saveMessage = null
         saveTone = NoticeTone.Success
         autoFilledStudentId = null
+        currentVerificationStatus = defaultDraftVerificationStatus(context)
         studentIdHasFocus = false
         requestedLookupStudentId = null
         lookupRequestVersion = 0
@@ -190,6 +216,7 @@ private fun MyCardsScreen(
         if (autoFilledStudentId != null && normalizedStudentId != autoFilledStudentId) {
             name = ""
             autoFilledStudentId = null
+            currentVerificationStatus = defaultDraftVerificationStatus(context)
         }
     }
 
@@ -206,17 +233,19 @@ private fun MyCardsScreen(
             return@LaunchedEffect
         }
 
-        if (normalizedStudentId.length < 6) {
-            isLookingUp = false
-            lookupMessage = "学号输入完成后会自动尝试查找姓名。"
-            lookupTone = NoticeTone.Info
-            return@LaunchedEffect
-        }
-
         if (!hasLocalLoginState(context)) {
             isLookingUp = false
             lookupMessage = "当前未登录，无法验证真实性，但仍可手动填写姓名后保存。"
             lookupTone = NoticeTone.Warning
+            currentVerificationStatus = CardVerificationStatus.OfflineUnverified
+            return@LaunchedEffect
+        }
+
+        if (!isNetworkAvailable(context)) {
+            isLookingUp = false
+            lookupMessage = "当前无网络，无法在线验证，但仍可手动填写姓名后保存。"
+            lookupTone = NoticeTone.Warning
+            currentVerificationStatus = CardVerificationStatus.OfflineUnverified
             return@LaunchedEffect
         }
 
@@ -230,18 +259,28 @@ private fun MyCardsScreen(
                 autoFilledStudentId = normalizedStudentId
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Success
+                currentVerificationStatus = CardVerificationStatus.Verified
             }
             CardLookupStatus.NotFound -> {
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Warning
+                currentVerificationStatus = CardVerificationStatus.Failed
             }
             CardLookupStatus.LoginRequired -> {
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Warning
+                currentVerificationStatus = CardVerificationStatus.OfflineUnverified
             }
             CardLookupStatus.Error -> {
-                lookupMessage = lookupResult.message
-                lookupTone = NoticeTone.Warning
+                if (!isNetworkAvailable(context)) {
+                    lookupMessage = "当前无网络，无法在线验证，但仍可手动填写姓名后保存。"
+                    lookupTone = NoticeTone.Warning
+                    currentVerificationStatus = CardVerificationStatus.OfflineUnverified
+                } else {
+                    lookupMessage = lookupResult.message
+                    lookupTone = NoticeTone.Warning
+                    currentVerificationStatus = CardVerificationStatus.Failed
+                }
             }
         }
     }
@@ -311,9 +350,10 @@ private fun MyCardsScreen(
                             note = card.note
                             saveMessage = null
                             saveTone = NoticeTone.Success
-                            lookupMessage = "学号输入完成后会自动尝试查找姓名。"
+                            lookupMessage = "离开学号输入框后可重新验证姓名。"
                             lookupTone = NoticeTone.Info
                             autoFilledStudentId = card.studentId
+                            currentVerificationStatus = card.verificationStatus
                             requestedLookupStudentId = null
                             lookupRequestVersion = 0
                             showAddSheet = true
@@ -362,12 +402,18 @@ private fun MyCardsScreen(
                 onNameChange = {
                     name = it
                     autoFilledStudentId = null
+                    currentVerificationStatus = defaultDraftVerificationStatus(context)
                 },
                 onNoteChange = { note = it },
                 onSave = {
                     val normalizedStudentId = studentId.trim()
                     val normalizedName = name.trim()
                     val normalizedNote = note.trim()
+                    val effectiveVerificationStatus = when {
+                        !hasLocalLoginState(context) -> CardVerificationStatus.OfflineUnverified
+                        !isNetworkAvailable(context) -> CardVerificationStatus.OfflineUnverified
+                        else -> currentVerificationStatus
+                    }
 
                     when {
                         normalizedStudentId.isBlank() -> {
@@ -385,7 +431,8 @@ private fun MyCardsScreen(
                                 card = SavedCard(
                                     studentId = normalizedStudentId,
                                     name = normalizedName,
-                                    note = normalizedNote
+                                    note = normalizedNote,
+                                    verificationStatus = effectiveVerificationStatus
                                 )
                             )
                             saveMessage = if (editingOriginalStudentId == null) {
@@ -654,12 +701,20 @@ private fun SavedCardItem(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = title,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = title,
+                            modifier = Modifier.weight(1f),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        VerificationBadge(status = card.verificationStatus)
+                    }
                     if (showNameSubtitle) {
                         Text(
                             text = card.name,
@@ -668,6 +723,22 @@ private fun SavedCardItem(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = card.studentId,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(
@@ -685,17 +756,52 @@ private fun SavedCardItem(
                     }
                 }
             }
-
-            Text(
-                text = card.studentId,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
         }
+    }
+}
+
+@Composable
+private fun VerificationBadge(status: CardVerificationStatus) {
+    val style = when (status) {
+        CardVerificationStatus.Verified -> VerificationBadgeStyle(
+            label = "已验证",
+            icon = Icons.Filled.CheckCircle,
+            containerColor = Color(0xFFE8F5E9),
+            contentColor = Color(0xFF1B5E20)
+        )
+        CardVerificationStatus.OfflineUnverified -> VerificationBadgeStyle(
+            label = "未验证",
+            icon = Icons.Filled.CloudOff,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        CardVerificationStatus.Failed -> VerificationBadgeStyle(
+            label = "验证失败",
+            icon = Icons.Filled.ErrorOutline,
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .background(style.containerColor, RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = style.icon,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = style.contentColor
+        )
+        Text(
+            text = style.label,
+            fontSize = 11.sp,
+            color = style.contentColor,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -727,6 +833,29 @@ private fun hasLocalLoginState(context: Context): Boolean {
     return loginSource != null || !cookieHeader.isNullOrBlank()
 }
 
+private fun isNetworkAvailable(context: Context): Boolean {
+    val connectivityManager =
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+}
+
+@Composable
+private fun CardVerificationStatus.color() = when (this) {
+    CardVerificationStatus.Verified -> MaterialTheme.colorScheme.primary
+    CardVerificationStatus.OfflineUnverified -> MaterialTheme.colorScheme.onSurfaceVariant
+    CardVerificationStatus.Failed -> MaterialTheme.colorScheme.error
+}
+
+private fun CardVerificationStatus.label() = when (this) {
+    CardVerificationStatus.Verified -> "已验证"
+    CardVerificationStatus.OfflineUnverified -> "未验证（离线添加）"
+    CardVerificationStatus.Failed -> "验证失败"
+}
+
 private fun defaultLookupMessage(context: Context): String {
     return if (hasLocalLoginState(context)) {
         "输入学号后会自动查找并填充姓名。"
@@ -737,6 +866,14 @@ private fun defaultLookupMessage(context: Context): String {
 
 private fun defaultLookupTone(context: Context): NoticeTone {
     return if (hasLocalLoginState(context)) NoticeTone.Info else NoticeTone.Warning
+}
+
+private fun defaultDraftVerificationStatus(context: Context): CardVerificationStatus {
+    return if (!hasLocalLoginState(context) || !isNetworkAvailable(context)) {
+        CardVerificationStatus.OfflineUnverified
+    } else {
+        CardVerificationStatus.Failed
+    }
 }
 
 private fun loadSavedCards(context: Context): List<SavedCard> {
@@ -751,8 +888,17 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
                 val studentId = obj.optString("studentId").trim()
                 val name = obj.optString("name").trim()
                 val note = obj.optString("note").trim()
+                val verificationStatus = obj.optString("verificationStatus")
+                    .toCardVerificationStatus()
                 if (studentId.isBlank() || name.isBlank()) continue
-                add(SavedCard(studentId = studentId, name = name, note = note))
+                add(
+                    SavedCard(
+                        studentId = studentId,
+                        name = name,
+                        note = note,
+                        verificationStatus = verificationStatus
+                    )
+                )
             }
         }
     }.getOrElse { emptyList() }
@@ -780,6 +926,7 @@ private fun upsertSavedCard(
                 put("studentId", savedCard.studentId)
                 put("name", savedCard.name)
                 put("note", savedCard.note)
+                put("verificationStatus", savedCard.verificationStatus.name)
             }
         )
     }
@@ -801,6 +948,7 @@ private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard
                 put("studentId", savedCard.studentId)
                 put("name", savedCard.name)
                 put("note", savedCard.note)
+                put("verificationStatus", savedCard.verificationStatus.name)
             }
         )
     }
@@ -809,6 +957,15 @@ private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard
         .putString(KEY_CARDS_JSON, array.toString())
         .apply()
     return updatedCards
+}
+
+private fun String?.toCardVerificationStatus(): CardVerificationStatus {
+    return when (this) {
+        CardVerificationStatus.Verified.name -> CardVerificationStatus.Verified
+        CardVerificationStatus.Failed.name -> CardVerificationStatus.Failed
+        CardVerificationStatus.OfflineUnverified.name -> CardVerificationStatus.OfflineUnverified
+        else -> CardVerificationStatus.OfflineUnverified
+    }
 }
 
 private suspend fun lookupCardOwner(context: Context, studentId: String): CardLookupResult {
