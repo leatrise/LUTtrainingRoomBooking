@@ -122,8 +122,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.time.ZoneId
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
@@ -1555,12 +1556,10 @@ fun SearchAvailabilityScreen(
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var showStartTimePickerDialog by remember { mutableStateOf(false) }
     var showEndTimePickerDialog by remember { mutableStateOf(false) }
-    val zoneId = remember { ZoneId.systemDefault() }
-
     if (showDatePickerDialog) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = selectedDate
-                .atStartOfDay(zoneId)
+                .atStartOfDay(ZoneOffset.UTC)
                 .toInstant()
                 .toEpochMilli()
         )
@@ -1572,7 +1571,7 @@ fun SearchAvailabilityScreen(
                         val millis = datePickerState.selectedDateMillis
                         if (millis != null) {
                             selectedDate = Instant.ofEpochMilli(millis)
-                                .atZone(zoneId)
+                                .atOffset(ZoneOffset.UTC)
                                 .toLocalDate()
                             dateText = selectedDate.format(dateFormatter)
                         }
