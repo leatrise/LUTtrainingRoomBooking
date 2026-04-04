@@ -828,6 +828,10 @@ private suspend fun loadReservationsCache(context: Context): Map<String, List<Re
 }
 
 suspend fun fetchReservations(roomId: String): List<ReservationItem> {
+    return fetchReservationsOrNull(roomId).orEmpty()
+}
+
+private suspend fun fetchReservationsOrNull(roomId: String): List<ReservationItem>? {
     return withContext(Dispatchers.IO) {
         try {
             val url = URL("https://weixinlib.lut.edu.cn/datafeed?method=list&id=$roomId")
@@ -840,7 +844,7 @@ suspend fun fetchReservations(roomId: String): List<ReservationItem> {
             parseReservations(json)
         } catch (e: Exception) {
             Log.e("MainActivity", "获取房间 $roomId 预约信息失败: ${e.message}", e)
-            emptyList()
+            null
         }
     }
 }
@@ -1821,24 +1825,46 @@ fun SearchAvailabilityScreen(
         ongoing = 0
         statusText = "获取中（0/${state.totalRooms}）"
         scope.launch {
+            var failedCount = 0
             try {
                 rooms.forEachIndexed { idx, room ->
-                    val res = fetchReservations(room.id)
-                    reservationResults[room.id] = res
+                    val res = fetchReservationsOrNull(room.id)
+                    if (res != null) {
+                        reservationResults[room.id] = res
+                    } else {
+                        failedCount += 1
+                    }
                     ongoing = idx + 1
                     statusText = "获取中（${ongoing}/${state.totalRooms}）"
                 }
-                saveReservationsCache(context, reservationResults.toMap())
-                val rawTs = loadReservationsCacheTimestamp(context)
-                reservationsCacheTimeText = formatCacheTimestamp(rawTs)
-                reservationsCacheSavedAtMillis = rawTs?.trim()?.toLongOrNull()
-                reservationsCacheAgeMillis = cacheAgeMillis(rawTs)
-                statusText = buildReservationsCacheStatus(
-                    prefix = "已加载缓存",
-                    count = reservationResults.size,
-                    cacheAgeText = formatCacheAgeText(reservationsCacheAgeMillis),
-                    cacheTimeText = reservationsCacheTimeText
-                )
+                if (failedCount == 0) {
+                    saveReservationsCache(context, reservationResults.toMap())
+                    val rawTs = loadReservationsCacheTimestamp(context)
+                    reservationsCacheTimeText = formatCacheTimestamp(rawTs)
+                    reservationsCacheSavedAtMillis = rawTs?.trim()?.toLongOrNull()
+                    reservationsCacheAgeMillis = cacheAgeMillis(rawTs)
+                } else {
+                    reservationsCacheAgeMillis = reservationsCacheSavedAtMillis?.let { savedAt ->
+                        (System.currentTimeMillis() - savedAt).coerceAtLeast(0L)
+                    }
+                }
+                statusText = if (failedCount > 0 && reservationResults.isNotEmpty()) {
+                    buildReservationsCacheStatus(
+                        prefix = "网络异常，继续使用缓存",
+                        count = reservationResults.size,
+                        cacheAgeText = formatCacheAgeText(reservationsCacheAgeMillis),
+                        cacheTimeText = reservationsCacheTimeText
+                    )
+                } else if (failedCount > 0) {
+                    "网络异常，且暂无可用预约缓存"
+                } else {
+                    buildReservationsCacheStatus(
+                        prefix = "已加载缓存",
+                        count = reservationResults.size,
+                        cacheAgeText = formatCacheAgeText(reservationsCacheAgeMillis),
+                        cacheTimeText = reservationsCacheTimeText
+                    )
+                }
                 afterFetch?.invoke()
             } catch (e: CancellationException) {
                 statusText = "获取已取消（${ongoing}/${state.totalRooms}）"
