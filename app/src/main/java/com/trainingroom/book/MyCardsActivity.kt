@@ -5,6 +5,7 @@ import android.net.NetworkCapabilities
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -55,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import com.trainingroom.book.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -149,6 +153,12 @@ private data class CardLookupResult(
     val message: String
 )
 
+private data class BulkVerifyResult(
+    val cards: List<SavedCard>,
+    val successCount: Int,
+    val failedCount: Int
+)
+
 private enum class NoticeTone {
     Info,
     Success,
@@ -171,6 +181,7 @@ private fun MyCardsScreen(
     initialCards: List<SavedCard>? = null
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showHint by rememberSaveable { mutableStateOf(true) }
     var savedCards by remember(initialCards) { mutableStateOf(initialCards ?: loadSavedCards(context)) }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
@@ -191,6 +202,7 @@ private fun MyCardsScreen(
     var studentIdHasFocus by remember { mutableStateOf(false) }
     var requestedLookupStudentId by remember { mutableStateOf<String?>(null) }
     var lookupRequestVersion by remember { mutableStateOf(0) }
+    var isBulkVerifying by remember { mutableStateOf(false) }
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     fun resetEditorState() {
@@ -327,12 +339,53 @@ private fun MyCardsScreen(
             }
 
             item {
-                Text(
-                    text = "已保存卡片",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "已保存卡片",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                isBulkVerifying = true
+                                val result = verifyUnverifiedCards(context, savedCards)
+                                savedCards = result.cards
+                                isBulkVerifying = false
+                                val message = when {
+                                    result.successCount == 0 && result.failedCount == 0 ->
+                                        "当前没有可验证的卡片"
+                                    else ->
+                                        "${result.successCount} 个验证成功，${result.failedCount} 个验证失败"
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = !isBulkVerifying && savedCards.any {
+                            it.verificationStatus == CardVerificationStatus.OfflineUnverified
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "验证未验证卡片",
+                            tint = if (savedCards.any {
+                                    it.verificationStatus == CardVerificationStatus.OfflineUnverified
+                                } && !isBulkVerifying
+                            ) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
 
             if (savedCards.isEmpty()) {
@@ -922,30 +975,67 @@ private fun upsertSavedCard(
             .forEach { add(it) }
     }
 
-    val array = JSONArray()
-    updatedCards.forEach { savedCard ->
-        array.put(
-            JSONObject().apply {
-                put("studentId", savedCard.studentId)
-                put("name", savedCard.name)
-                put("note", savedCard.note)
-                put("verificationStatus", savedCard.verificationStatus.name)
-            }
-        )
-    }
-
-    context.getSharedPreferences(CARD_PREFS_NAME, Context.MODE_PRIVATE)
-        .edit()
-        .putString(KEY_CARDS_JSON, array.toString())
-        .apply()
-
+    persistSavedCards(context, updatedCards)
     return updatedCards
 }
 
 private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard> {
     val updatedCards = loadSavedCards(context).filterNot { it.studentId == studentId }
+    persistSavedCards(context, updatedCards)
+    return updatedCards
+}
+
+private suspend fun verifyUnverifiedCards(
+    context: Context,
+    cards: List<SavedCard>
+): BulkVerifyResult {
+    if (!hasLocalLoginState(context) || !isNetworkAvailable(context)) {
+        return BulkVerifyResult(cards = cards, successCount = 0, failedCount = 0)
+    }
+
+    var successCount = 0
+    var failedCount = 0
+    val updatedCards = buildList {
+        for (card in cards) {
+            if (card.verificationStatus != CardVerificationStatus.OfflineUnverified) {
+                add(card)
+                continue
+            }
+
+            val lookupResult = lookupCardOwner(context, card.studentId)
+            when (lookupResult.status) {
+                CardLookupStatus.Success -> {
+                    successCount += 1
+                    add(
+                        card.copy(
+                            name = lookupResult.name.orEmpty().ifBlank { card.name },
+                            verificationStatus = CardVerificationStatus.Verified
+                        )
+                    )
+                }
+                CardLookupStatus.LoginRequired -> {
+                    add(card.copy(verificationStatus = CardVerificationStatus.OfflineUnverified))
+                }
+                CardLookupStatus.NotFound,
+                CardLookupStatus.Error -> {
+                    failedCount += 1
+                    add(card.copy(verificationStatus = CardVerificationStatus.Failed))
+                }
+            }
+        }
+    }
+
+    persistSavedCards(context, updatedCards)
+    return BulkVerifyResult(
+        cards = updatedCards,
+        successCount = successCount,
+        failedCount = failedCount
+    )
+}
+
+private fun persistSavedCards(context: Context, cards: List<SavedCard>) {
     val array = JSONArray()
-    updatedCards.forEach { savedCard ->
+    cards.forEach { savedCard ->
         array.put(
             JSONObject().apply {
                 put("studentId", savedCard.studentId)
@@ -959,7 +1049,6 @@ private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard
         .edit()
         .putString(KEY_CARDS_JSON, array.toString())
         .apply()
-    return updatedCards
 }
 
 private fun String?.toCardVerificationStatus(): CardVerificationStatus {
