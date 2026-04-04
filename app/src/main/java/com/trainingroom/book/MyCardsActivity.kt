@@ -385,6 +385,7 @@ private fun MyCardsScreen(
                 studentId = studentId,
                 name = name,
                 note = note,
+                isNameLocked = currentVerificationStatus == CardVerificationStatus.Verified,
                 isLookingUp = isLookingUp,
                 lookupMessage = lookupMessage,
                 lookupTone = lookupTone,
@@ -533,6 +534,7 @@ private fun CardEditorSheet(
     studentId: String,
     name: String,
     note: String,
+    isNameLocked: Boolean,
     isLookingUp: Boolean,
     lookupMessage: String,
     lookupTone: NoticeTone,
@@ -581,6 +583,7 @@ private fun CardEditorSheet(
             value = name,
             onValueChange = onNameChange,
             modifier = Modifier.fillMaxWidth(),
+            enabled = !isNameLocked,
             singleLine = true,
             label = { Text("*姓名") },
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
