@@ -109,7 +109,8 @@ private data class SavedCard(
     val studentId: String,
     val name: String,
     val note: String,
-    val verificationStatus: CardVerificationStatus
+    val verificationStatus: CardVerificationStatus,
+    val verificationMessage: String? = null
 )
 
 private val previewSavedCards = listOf(
@@ -142,6 +143,7 @@ private data class VerificationBadgeStyle(
 
 private enum class CardLookupStatus {
     Success,
+    NameMismatch,
     NotFound,
     LoginRequired,
     Error
@@ -156,7 +158,8 @@ private data class CardLookupResult(
 private data class BulkVerifyResult(
     val cards: List<SavedCard>,
     val successCount: Int,
-    val failedCount: Int
+    val failedCount: Int,
+    val nameMismatchCount: Int
 )
 
 private enum class NoticeTone {
@@ -273,6 +276,11 @@ private fun MyCardsScreen(
                 lookupTone = NoticeTone.Success
                 currentVerificationStatus = CardVerificationStatus.Verified
             }
+            CardLookupStatus.NameMismatch -> {
+                lookupMessage = lookupResult.message
+                lookupTone = NoticeTone.Warning
+                currentVerificationStatus = CardVerificationStatus.Failed
+            }
             CardLookupStatus.NotFound -> {
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Warning
@@ -360,6 +368,8 @@ private fun MyCardsScreen(
                                 val message = when {
                                     result.successCount == 0 && result.failedCount == 0 ->
                                         "当前没有可验证的卡片"
+                                    result.nameMismatchCount > 0 ->
+                                        "${result.successCount} 个验证成功，${result.failedCount} 个验证失败，其中 ${result.nameMismatchCount} 个姓名不匹配"
                                     else ->
                                         "${result.successCount} 个验证成功，${result.failedCount} 个验证失败"
                                 }
@@ -486,7 +496,12 @@ private fun MyCardsScreen(
                                     studentId = normalizedStudentId,
                                     name = normalizedName,
                                     note = normalizedNote,
-                                    verificationStatus = effectiveVerificationStatus
+                                    verificationStatus = effectiveVerificationStatus,
+                                    verificationMessage = when (effectiveVerificationStatus) {
+                                        CardVerificationStatus.Verified -> "已验证"
+                                        CardVerificationStatus.OfflineUnverified -> null
+                                        CardVerificationStatus.Failed -> lookupMessage
+                                    }
                                 )
                             )
                             saveMessage = if (editingOriginalStudentId == null) {
@@ -769,7 +784,10 @@ private fun SavedCardItem(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        VerificationBadge(status = card.verificationStatus)
+                        VerificationBadge(
+                            status = card.verificationStatus,
+                            message = card.verificationMessage
+                        )
                     }
                     if (showNameSubtitle) {
                         Text(
@@ -817,7 +835,7 @@ private fun SavedCardItem(
 }
 
 @Composable
-private fun VerificationBadge(status: CardVerificationStatus) {
+private fun VerificationBadge(status: CardVerificationStatus, message: String?) {
     val style = when (status) {
         CardVerificationStatus.Verified -> VerificationBadgeStyle(
             label = "已验证",
@@ -832,7 +850,7 @@ private fun VerificationBadge(status: CardVerificationStatus) {
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
         CardVerificationStatus.Failed -> VerificationBadgeStyle(
-            label = "验证失败",
+            label = if (message == "姓名不匹配") "姓名不匹配" else "验证失败",
             icon = Icons.Filled.ErrorOutline,
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -952,7 +970,8 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
                         studentId = studentId,
                         name = name,
                         note = note,
-                        verificationStatus = verificationStatus
+                        verificationStatus = verificationStatus,
+                        verificationMessage = obj.optString("verificationMessage").trim().ifBlank { null }
                     )
                 )
             }
@@ -990,11 +1009,12 @@ private suspend fun verifyUnverifiedCards(
     cards: List<SavedCard>
 ): BulkVerifyResult {
     if (!hasLocalLoginState(context) || !isNetworkAvailable(context)) {
-        return BulkVerifyResult(cards = cards, successCount = 0, failedCount = 0)
+        return BulkVerifyResult(cards = cards, successCount = 0, failedCount = 0, nameMismatchCount = 0)
     }
 
     var successCount = 0
     var failedCount = 0
+    var nameMismatchCount = 0
     val updatedCards = buildList {
         for (card in cards) {
             if (card.verificationStatus != CardVerificationStatus.OfflineUnverified) {
@@ -1002,24 +1022,44 @@ private suspend fun verifyUnverifiedCards(
                 continue
             }
 
-            val lookupResult = lookupCardOwner(context, card.studentId)
+            val lookupResult = lookupCardOwner(context, studentId = card.studentId, expectedName = card.name)
             when (lookupResult.status) {
                 CardLookupStatus.Success -> {
                     successCount += 1
                     add(
                         card.copy(
-                            name = lookupResult.name.orEmpty().ifBlank { card.name },
-                            verificationStatus = CardVerificationStatus.Verified
+                            verificationStatus = CardVerificationStatus.Verified,
+                            verificationMessage = "已验证"
+                        )
+                    )
+                }
+                CardLookupStatus.NameMismatch -> {
+                    failedCount += 1
+                    nameMismatchCount += 1
+                    add(
+                        card.copy(
+                            verificationStatus = CardVerificationStatus.Failed,
+                            verificationMessage = "姓名不匹配"
                         )
                     )
                 }
                 CardLookupStatus.LoginRequired -> {
-                    add(card.copy(verificationStatus = CardVerificationStatus.OfflineUnverified))
+                    add(
+                        card.copy(
+                            verificationStatus = CardVerificationStatus.OfflineUnverified,
+                            verificationMessage = null
+                        )
+                    )
                 }
                 CardLookupStatus.NotFound,
                 CardLookupStatus.Error -> {
                     failedCount += 1
-                    add(card.copy(verificationStatus = CardVerificationStatus.Failed))
+                    add(
+                        card.copy(
+                            verificationStatus = CardVerificationStatus.Failed,
+                            verificationMessage = lookupResult.message
+                        )
+                    )
                 }
             }
         }
@@ -1029,7 +1069,8 @@ private suspend fun verifyUnverifiedCards(
     return BulkVerifyResult(
         cards = updatedCards,
         successCount = successCount,
-        failedCount = failedCount
+        failedCount = failedCount,
+        nameMismatchCount = nameMismatchCount
     )
 }
 
@@ -1042,6 +1083,7 @@ private fun persistSavedCards(context: Context, cards: List<SavedCard>) {
                 put("name", savedCard.name)
                 put("note", savedCard.note)
                 put("verificationStatus", savedCard.verificationStatus.name)
+                put("verificationMessage", savedCard.verificationMessage)
             }
         )
     }
@@ -1060,8 +1102,12 @@ private fun String?.toCardVerificationStatus(): CardVerificationStatus {
     }
 }
 
-private suspend fun lookupCardOwner(context: Context, studentId: String): CardLookupResult {
-    val firstAttempt = lookupCardOwnerOnce(context, studentId)
+private suspend fun lookupCardOwner(
+    context: Context,
+    studentId: String,
+    expectedName: String? = null
+): CardLookupResult {
+    val firstAttempt = lookupCardOwnerOnce(context, studentId, expectedName)
     if (firstAttempt.status != CardLookupStatus.LoginRequired || !AuthSessionManager.isSsoLogin(context)) {
         return firstAttempt
     }
@@ -1073,10 +1119,14 @@ private suspend fun lookupCardOwner(context: Context, studentId: String): CardLo
             message = renewResult.message ?: "当前登录态已失效，无法验证真实性，可手动填写姓名后保存。"
         )
     }
-    return lookupCardOwnerOnce(context, studentId)
+    return lookupCardOwnerOnce(context, studentId, expectedName)
 }
 
-private suspend fun lookupCardOwnerOnce(context: Context, studentId: String): CardLookupResult {
+private suspend fun lookupCardOwnerOnce(
+    context: Context,
+    studentId: String,
+    expectedName: String? = null
+): CardLookupResult {
     return withContext(Dispatchers.IO) {
         AuthSessionManager.install(context)
         val rawCookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
@@ -1158,6 +1208,15 @@ private suspend fun lookupCardOwnerOnce(context: Context, studentId: String): Ca
                 return@runCatching CardLookupResult(
                     status = CardLookupStatus.NotFound,
                     message = "未找到对应信息，请核对学号或手动填写姓名。"
+                )
+            }
+
+            val normalizedExpectedName = expectedName?.trim().orEmpty()
+            if (normalizedExpectedName.isNotBlank() && foundName != normalizedExpectedName) {
+                return@runCatching CardLookupResult(
+                    status = CardLookupStatus.NameMismatch,
+                    name = foundName,
+                    message = "姓名不匹配"
                 )
             }
 
