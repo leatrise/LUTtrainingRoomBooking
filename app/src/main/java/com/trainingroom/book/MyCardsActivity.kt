@@ -976,11 +976,7 @@ private fun defaultLookupTone(context: Context): NoticeTone {
 }
 
 private fun defaultDraftVerificationStatus(context: Context): CardVerificationStatus {
-    return if (!hasLocalLoginState(context) || !isNetworkAvailable(context)) {
-        CardVerificationStatus.OfflineUnverified
-    } else {
-        CardVerificationStatus.Failed
-    }
+    return CardVerificationStatus.OfflineUnverified
 }
 
 private fun loadSavedCards(context: Context): List<SavedCard> {
