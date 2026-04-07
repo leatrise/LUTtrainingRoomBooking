@@ -109,6 +109,8 @@ private data class SavedCard(
     val studentId: String,
     val name: String,
     val note: String,
+    val userUnit: String = "",
+    val userType: String = "",
     val verificationStatus: CardVerificationStatus,
     val verificationMessage: String? = null
 )
@@ -152,6 +154,8 @@ private enum class CardLookupStatus {
 private data class CardLookupResult(
     val status: CardLookupStatus,
     val name: String? = null,
+    val userUnit: String? = null,
+    val userType: String? = null,
     val message: String
 )
 
@@ -199,6 +203,8 @@ private fun MyCardsScreen(
     var saveMessage by remember { mutableStateOf<String?>(null) }
     var saveTone by remember { mutableStateOf(NoticeTone.Success) }
     var autoFilledStudentId by remember { mutableStateOf<String?>(null) }
+    var userUnit by remember { mutableStateOf("") }
+    var userType by remember { mutableStateOf("") }
     var currentVerificationStatus by remember {
         mutableStateOf(defaultDraftVerificationStatus(context))
     }
@@ -218,6 +224,8 @@ private fun MyCardsScreen(
         saveMessage = null
         saveTone = NoticeTone.Success
         autoFilledStudentId = null
+        userUnit = ""
+        userType = ""
         currentVerificationStatus = defaultDraftVerificationStatus(context)
         studentIdHasFocus = false
         requestedLookupStudentId = null
@@ -231,6 +239,8 @@ private fun MyCardsScreen(
         if (autoFilledStudentId != null && normalizedStudentId != autoFilledStudentId) {
             name = ""
             autoFilledStudentId = null
+            userUnit = ""
+            userType = ""
             currentVerificationStatus = defaultDraftVerificationStatus(context)
         }
     }
@@ -271,12 +281,16 @@ private fun MyCardsScreen(
         when (lookupResult.status) {
             CardLookupStatus.Success -> {
                 name = lookupResult.name.orEmpty()
+                userUnit = lookupResult.userUnit.orEmpty()
+                userType = lookupResult.userType.orEmpty()
                 autoFilledStudentId = normalizedStudentId
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Success
                 currentVerificationStatus = CardVerificationStatus.Verified
             }
             CardLookupStatus.NameMismatch -> {
+                userUnit = lookupResult.userUnit.orEmpty()
+                userType = lookupResult.userType.orEmpty()
                 lookupMessage = lookupResult.message
                 lookupTone = NoticeTone.Warning
                 currentVerificationStatus = CardVerificationStatus.Failed
@@ -411,6 +425,8 @@ private fun MyCardsScreen(
                             studentId = card.studentId
                             name = card.name
                             note = card.note
+                            userUnit = card.userUnit
+                            userType = card.userType
                             saveMessage = null
                             saveTone = NoticeTone.Success
                             lookupMessage = "离开学号输入框后可重新验证姓名。"
@@ -448,6 +464,13 @@ private fun MyCardsScreen(
                 studentId = studentId,
                 name = name,
                 note = note,
+                notePlaceholder = buildString {
+                    if (userUnit.isNotBlank()) append(userUnit)
+                    if (userType.isNotBlank()) {
+                        if (isNotEmpty()) append("，")
+                        append(userType)
+                    }
+                },
                 isNameLocked = currentVerificationStatus == CardVerificationStatus.Verified,
                 isLookingUp = isLookingUp,
                 lookupMessage = lookupMessage,
@@ -466,6 +489,8 @@ private fun MyCardsScreen(
                 onNameChange = {
                     name = it
                     autoFilledStudentId = null
+                    userUnit = ""
+                    userType = ""
                     currentVerificationStatus = defaultDraftVerificationStatus(context)
                 },
                 onNoteChange = { note = it },
@@ -496,6 +521,8 @@ private fun MyCardsScreen(
                                     studentId = normalizedStudentId,
                                     name = normalizedName,
                                     note = normalizedNote,
+                                    userUnit = userUnit,
+                                    userType = userType,
                                     verificationStatus = effectiveVerificationStatus,
                                     verificationMessage = when (effectiveVerificationStatus) {
                                         CardVerificationStatus.Verified -> "已验证"
@@ -602,6 +629,7 @@ private fun CardEditorSheet(
     studentId: String,
     name: String,
     note: String,
+    notePlaceholder: String,
     isNameLocked: Boolean,
     isLookingUp: Boolean,
     lookupMessage: String,
@@ -664,6 +692,11 @@ private fun CardEditorSheet(
             onValueChange = onNoteChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text("备注") },
+            placeholder = {
+                if (notePlaceholder.isNotBlank()) {
+                    Text(notePlaceholder)
+                }
+            },
             minLines = 2,
             maxLines = 4,
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -962,6 +995,8 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
                 val studentId = obj.optString("studentId").trim()
                 val name = obj.optString("name").trim()
                 val note = obj.optString("note").trim()
+                val userUnit = obj.optString("userUnit").trim()
+                val userType = obj.optString("userType").trim()
                 val verificationStatus = obj.optString("verificationStatus")
                     .toCardVerificationStatus()
                 if (studentId.isBlank() || name.isBlank()) continue
@@ -970,6 +1005,8 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
                         studentId = studentId,
                         name = name,
                         note = note,
+                        userUnit = userUnit,
+                        userType = userType,
                         verificationStatus = verificationStatus,
                         verificationMessage = obj.optString("verificationMessage").trim().ifBlank { null }
                     )
@@ -1028,6 +1065,8 @@ private suspend fun verifyUnverifiedCards(
                     successCount += 1
                     add(
                         card.copy(
+                            userUnit = lookupResult.userUnit.orEmpty().ifBlank { card.userUnit },
+                            userType = lookupResult.userType.orEmpty().ifBlank { card.userType },
                             verificationStatus = CardVerificationStatus.Verified,
                             verificationMessage = "已验证"
                         )
@@ -1038,6 +1077,8 @@ private suspend fun verifyUnverifiedCards(
                     nameMismatchCount += 1
                     add(
                         card.copy(
+                            userUnit = lookupResult.userUnit.orEmpty().ifBlank { card.userUnit },
+                            userType = lookupResult.userType.orEmpty().ifBlank { card.userType },
                             verificationStatus = CardVerificationStatus.Failed,
                             verificationMessage = "姓名不匹配"
                         )
@@ -1056,6 +1097,8 @@ private suspend fun verifyUnverifiedCards(
                     failedCount += 1
                     add(
                         card.copy(
+                            userUnit = lookupResult.userUnit.orEmpty().ifBlank { card.userUnit },
+                            userType = lookupResult.userType.orEmpty().ifBlank { card.userType },
                             verificationStatus = CardVerificationStatus.Failed,
                             verificationMessage = lookupResult.message
                         )
@@ -1082,6 +1125,8 @@ private fun persistSavedCards(context: Context, cards: List<SavedCard>) {
                 put("studentId", savedCard.studentId)
                 put("name", savedCard.name)
                 put("note", savedCard.note)
+                put("userUnit", savedCard.userUnit)
+                put("userType", savedCard.userType)
                 put("verificationStatus", savedCard.verificationStatus.name)
                 put("verificationMessage", savedCard.verificationMessage)
             }
@@ -1204,6 +1249,8 @@ private suspend fun lookupCardOwnerOnce(
 
             val firstItem = array.optJSONObject(0)
             val foundName = firstItem?.optString("username")?.trim().orEmpty()
+            val foundUserUnit = firstItem?.optString("userunit")?.trim().orEmpty()
+            val foundUserType = firstItem?.optString("usertype")?.trim().orEmpty()
             if (foundName.isBlank()) {
                 return@runCatching CardLookupResult(
                     status = CardLookupStatus.NotFound,
@@ -1216,6 +1263,8 @@ private suspend fun lookupCardOwnerOnce(
                 return@runCatching CardLookupResult(
                     status = CardLookupStatus.NameMismatch,
                     name = foundName,
+                    userUnit = foundUserUnit,
+                    userType = foundUserType,
                     message = "姓名不匹配"
                 )
             }
@@ -1223,6 +1272,8 @@ private suspend fun lookupCardOwnerOnce(
             CardLookupResult(
                 status = CardLookupStatus.Success,
                 name = foundName,
+                userUnit = foundUserUnit,
+                userType = foundUserType,
                 message = "已自动找到并填充姓名。"
             )
         }.getOrElse { error ->
