@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -67,7 +68,10 @@ class RoomDetailActivity : ComponentActivity() {
                     RoomDetailScreen(
                         room = room,
                         offlineNotice = offlineNotice,
-                        onBack = { finish() }
+                        onBack = { finish() },
+                        onReserve = {
+                            startActivity(BookingEntryActivity.createIntent(this, room))
+                        }
                     )
                 }
             }
@@ -85,7 +89,8 @@ class RoomDetailActivity : ComponentActivity() {
 fun RoomDetailScreen(
     room: ConferenceRoom,
     offlineNotice: String?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onReserve: () -> Unit
 ) {
     var reservations by remember { mutableStateOf<List<ReservationItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -106,7 +111,8 @@ fun RoomDetailScreen(
         reservations = reservations,
         loading = loading,
         error = error,
-        onBack = onBack
+        onBack = onBack,
+        onReserve = onReserve
     )
 }
 
@@ -118,7 +124,8 @@ private fun RoomDetailContent(
     reservations: List<ReservationItem>,
     loading: Boolean,
     error: String?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onReserve: () -> Unit
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -196,6 +203,13 @@ private fun RoomDetailContent(
                     }
                 }
             }
+
+            Button(
+                onClick = onReserve,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("去预约")
+            }
         }
     }
 }
@@ -245,7 +259,8 @@ private fun RoomDetailScreenPreview() {
                 reservations = previewReservations,
                 loading = false,
                 error = null,
-                onBack = {}
+                onBack = {},
+                onReserve = {}
             )
         }
     }
