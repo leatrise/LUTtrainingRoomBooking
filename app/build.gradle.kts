@@ -30,7 +30,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = ciVersionCode ?: 1
-        versionName = "1.4.11"
+        versionName = "1.4.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

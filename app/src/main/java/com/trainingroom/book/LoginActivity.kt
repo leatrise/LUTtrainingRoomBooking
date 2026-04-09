@@ -2,6 +2,7 @@ package com.trainingroom.book
 
 import android.content.Context
 import android.content.Intent
+import android.content.ClipboardManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -398,6 +399,7 @@ private fun CookieLoginPanel(
     onLoginSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
     val scope = rememberCoroutineScope()
     var cookieHeader by rememberSaveable { mutableStateOf("") }
     var isSubmitting by rememberSaveable { mutableStateOf(false) }
@@ -464,10 +466,21 @@ private fun CookieLoginPanel(
                 }
             }
             OutlinedButton(
-                onClick = { cookieHeader = "" },
+                onClick = {
+                    cookieHeader = ""
+                    val clipboardText = clipboardManager?.primaryClip
+                        ?.getItemAt(0)
+                        ?.coerceToText(context)
+                        ?.toString()
+                        ?.trim()
+                        .orEmpty()
+                    if (clipboardText.isNotEmpty()) {
+                        cookieHeader = clipboardText
+                    }
+                },
                 modifier = Modifier.weight(1f)
             ) {
-                Text("清空")
+                Text("清空并粘贴")
             }
         }
 
