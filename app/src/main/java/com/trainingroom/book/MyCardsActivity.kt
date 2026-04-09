@@ -482,8 +482,18 @@ private fun MyCardsScreen(
                     val wasFocused = studentIdHasFocus
                     studentIdHasFocus = isFocused
                     if (wasFocused && !isFocused) {
-                        requestedLookupStudentId = studentId.trim()
-                        lookupRequestVersion += 1
+                        val normalizedStudentId = studentId.trim()
+                        val isEditingVerifiedCard =
+                            editingOriginalStudentId != null &&
+                                currentVerificationStatus == CardVerificationStatus.Verified
+                        if (isEditingVerifiedCard && normalizedStudentId == editingOriginalStudentId) {
+                            lookupMessage = "学号未修改，保留已验证状态。"
+                            lookupTone = NoticeTone.Success
+                            requestedLookupStudentId = null
+                        } else {
+                            requestedLookupStudentId = normalizedStudentId
+                            lookupRequestVersion += 1
+                        }
                     }
                 },
                 onNameChange = {
