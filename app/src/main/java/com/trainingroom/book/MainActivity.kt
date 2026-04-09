@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -1141,7 +1142,10 @@ fun HomeScreen() {
                     SearchAvailabilityScreen(
                         rooms = conferenceRooms,
                         state = searchState,
-                        onRoomSelected = openRoomDetail
+                        onRoomSelected = openRoomDetail,
+                        onReserveRoomSelected = { room ->
+                            context.startActivity(BookingEntryActivity.createIntent(context, room))
+                        }
                     )
                 }
                 2 -> {
@@ -1530,7 +1534,8 @@ fun rememberSearchAvailabilityState(): SearchAvailabilityState = remember { Sear
 fun SearchAvailabilityScreen(
     rooms: List<ConferenceRoom>,
     state: SearchAvailabilityState,
-    onRoomSelected: (ConferenceRoom) -> Unit
+    onRoomSelected: (ConferenceRoom) -> Unit,
+    onReserveRoomSelected: (ConferenceRoom) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2179,7 +2184,7 @@ fun SearchAvailabilityScreen(
                 } else {
                     Text(resultMessage, color = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(2.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         availableRooms.forEach { room ->
                             Card(
                                 modifier = Modifier
@@ -2193,17 +2198,34 @@ fun SearchAvailabilityScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(room.name, fontWeight = FontWeight.SemiBold)
-                                    Icon(
-                                        imageVector = Icons.Filled.ArrowBack,
-                                        contentDescription = "跳转详情",
-                                        modifier = Modifier.rotate(180f),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        Text(room.name, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { onReserveRoomSelected(room) },
+                                            modifier = Modifier.heightIn(min = 32.dp),
+                                            contentPadding = PaddingValues(horizontal = 13.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("去预约", fontSize = 12.sp)
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Filled.ArrowBack,
+                                            contentDescription = "跳转详情",
+                                            modifier = Modifier.rotate(180f),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2786,7 +2808,8 @@ fun SearchAvailabilityScreenPreview() {
             SearchAvailabilityScreen(
                 rooms = previewRooms,
                 state = previewState,
-                onRoomSelected = {}
+                onRoomSelected = {},
+                onReserveRoomSelected = {}
             )
         }
     }
