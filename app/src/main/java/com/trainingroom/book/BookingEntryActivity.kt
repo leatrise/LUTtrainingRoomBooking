@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,12 +31,14 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -42,17 +47,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trainingroom.book.ui.theme.MyApplicationTheme
+import org.json.JSONArray
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -99,6 +107,7 @@ private fun BookingEntryScreen(
     room: ConferenceRoom,
     onBack: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -107,14 +116,33 @@ private fun BookingEntryScreen(
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var showStartTimePickerDialog by remember { mutableStateOf(false) }
     var showEndTimePickerDialog by remember { mutableStateOf(false) }
-    val selectedCards = remember {
-        mutableStateListOf(
-            BookingUseCard(
-                studentId = "230165201055",
-                name = "当前登录人",
-                detail = "主预约人卡片"
+    var showCardPickerSheet by remember { mutableStateOf(false) }
+    var availableCards by remember { mutableStateOf(loadBookingSavedCards(context)) }
+    var selectedCardIds by remember { mutableStateOf(setOf<String>()) }
+    val selectedCards = remember(availableCards, selectedCardIds) {
+        availableCards.filter { it.studentId in selectedCardIds }
+    }
+    val cardPickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (showCardPickerSheet) {
+        var tempSelectedIds by remember(selectedCardIds, availableCards) {
+            mutableStateOf(selectedCardIds.intersect(availableCards.map { it.studentId }.toSet()))
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showCardPickerSheet = false },
+            sheetState = cardPickerSheetState
+        ) {
+            BookingCardPickerSheetContent(
+                availableCards = availableCards,
+                selectedCardIds = tempSelectedIds,
+                onToggleCard = { cardId -> tempSelectedIds = tempSelectedIds.toggle(cardId) },
+                onDismiss = { showCardPickerSheet = false },
+                onConfirm = {
+                    selectedCardIds = tempSelectedIds
+                    showCardPickerSheet = false
+                }
             )
-        )
+        }
     }
 
     if (showDatePickerDialog) {
@@ -253,8 +281,6 @@ private fun BookingEntryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(room.name, fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text("房间ID: ${room.id}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("位置: ${room.location}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         "容量: ${room.minCapacity} - ${room.maxCapacity} 人",
                         fontSize = 12.sp,
@@ -274,11 +300,6 @@ private fun BookingEntryScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text("预约时间", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text(
-                        "先确定使用日期和开始/结束时间，后续会在这里接入时段校验。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     OutlinedTextField(
                         value = selectedDate.format(dateFormatter),
                         onValueChange = {},
@@ -349,14 +370,11 @@ private fun BookingEntryScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("使用卡片", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Text(
-                        "这里预留选择卡片的入口和已选卡片列表，后续可接入“我的卡片”与成员检索。",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
                     OutlinedButton(
-                        onClick = {},
+                        onClick = {
+                            availableCards = loadBookingSavedCards(context)
+                            showCardPickerSheet = true
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
@@ -373,7 +391,7 @@ private fun BookingEntryScreen(
                                 .padding(vertical = 8.dp)
                         ) {
                             Text(
-                                text = "暂未添加使用卡片",
+                                text = if (availableCards.isEmpty()) "暂无已保存卡片" else "暂未选择使用卡片",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -396,7 +414,7 @@ private fun BookingEntryScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = card.name,
+                                                text = card.displayTitle(),
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
@@ -407,17 +425,11 @@ private fun BookingEntryScreen(
                                             )
                                         }
                                         Text(
-                                            text = "学号/证号：${card.studentId}",
+                                            text = card.displaySummary(),
                                             fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
                                         )
-                                        if (card.detail.isNotBlank()) {
-                                            Text(
-                                                text = card.detail,
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -466,5 +478,243 @@ private fun BookingEntryScreen(
 private data class BookingUseCard(
     val studentId: String,
     val name: String,
-    val detail: String
+    val note: String,
+    val userUnit: String = "",
+    val userType: String = ""
 )
+
+private const val BOOKING_CARD_PREFS_NAME = "saved_cards"
+private const val BOOKING_KEY_CARDS_JSON = "cards_json"
+
+private fun loadBookingSavedCards(context: Context): List<BookingUseCard> {
+    val raw = context.getSharedPreferences(BOOKING_CARD_PREFS_NAME, Context.MODE_PRIVATE)
+        .getString(BOOKING_KEY_CARDS_JSON, null)
+        .orEmpty()
+    if (raw.isBlank()) return emptyList()
+
+    return runCatching {
+        val array = JSONArray(raw)
+        buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val studentId = item.optString("studentId").trim()
+                if (studentId.isBlank()) continue
+                add(
+                    BookingUseCard(
+                        studentId = studentId,
+                        name = item.optString("name").trim(),
+                        note = item.optString("note").trim(),
+                        userUnit = item.optString("userUnit").trim(),
+                        userType = item.optString("userType").trim()
+                    )
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun Set<String>.toggle(studentId: String): Set<String> {
+    return if (studentId in this) this - studentId else this + studentId
+}
+
+private fun BookingUseCard.displayTitle(): String {
+    return note.ifBlank { name.ifBlank { studentId } }
+}
+
+private fun BookingUseCard.displaySummary(): String {
+    val parts = mutableListOf(studentId)
+    if (note.isNotBlank() && name.isNotBlank()) {
+        parts += name
+    }
+    if (userUnit.isNotBlank()) {
+        parts += userUnit
+    }
+    if (userType.isNotBlank()) {
+        parts += userType
+    }
+    return parts.joinToString(" · ")
+}
+
+@Composable
+private fun BookingCardPickerSheetContent(
+    availableCards: List<BookingUseCard>,
+    selectedCardIds: Set<String>,
+    onToggleCard: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "选择卡片",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "勾选需要参与本次预约的卡片信息。",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (availableCards.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Text(
+                    text = "“我的卡片”中还没有可用卡片，请先去个人中心添加。",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(availableCards, key = { it.studentId }) { card ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleCard(card.studentId) },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = card.studentId in selectedCardIds,
+                                onCheckedChange = { onToggleCard(card.studentId) }
+                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(0.dp)
+                            ) {
+                                Text(
+                                    text = card.displayTitle(),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = card.displaySummary(),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("取消")
+            }
+            Button(
+                onClick = onConfirm,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("确认选择")
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 920)
+@Composable
+private fun BookingEntryScreenPreview() {
+    val previewRoom = ConferenceRoom(
+        id = "126",
+        name = "研讨室 B708",
+        minCapacity = 6,
+        maxCapacity = 12,
+        location = "彭家坪校区 图书馆 7F",
+        floor = "7F",
+        inUse = false,
+        status = "空闲"
+    )
+
+    MyApplicationTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            BookingEntryScreen(
+                room = previewRoom,
+                onBack = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 420, heightDp = 760)
+@Composable
+private fun BookingCardPickerSheetContentPreview() {
+    var selectedIds by remember {
+        mutableStateOf(setOf("202300101", "202400101"))
+    }
+    val previewCards = listOf(
+        BookingUseCard(
+            studentId = "202300101",
+            name = "张三",
+            note = "主预约人",
+            userUnit = "计算机学院",
+            userType = "本科生"
+        ),
+        BookingUseCard(
+            studentId = "202400101",
+            name = "李四",
+            note = "学弟",
+            userUnit = "计算机学院",
+            userType = "本科生"
+        ),
+        BookingUseCard(
+            studentId = "202400201",
+            name = "王五",
+            note = "",
+            userUnit = "经济管理学院",
+            userType = "本科生"
+        )
+    )
+
+    MyApplicationTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            BookingCardPickerSheetContent(
+                availableCards = previewCards,
+                selectedCardIds = selectedIds,
+                onToggleCard = { cardId -> selectedIds = selectedIds.toggle(cardId) },
+                onDismiss = {},
+                onConfirm = {}
+            )
+        }
+    }
+}
