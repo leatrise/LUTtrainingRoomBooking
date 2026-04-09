@@ -541,6 +541,7 @@ suspend fun fetchConferenceRoomsFromWeb(): RoomFetchResult {
 suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
     val firstAttempt = fetchUserCenterProfileOnce(context)
     if (firstAttempt.profile != null) {
+        AuthSessionManager.setLoggedInState(context, true)
         return firstAttempt
     }
 
@@ -548,14 +549,26 @@ suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
         firstAttempt.message == "当前登录态已失效，请重新登录" &&
             AuthSessionManager.isSsoLogin(context)
     if (!shouldTrySilentRefresh) {
+        if (firstAttempt.message == "当前登录态已失效，请重新登录") {
+            AuthSessionManager.setLoggedInState(context, false)
+        }
         return firstAttempt
     }
 
     val renewResult = SsoLoginService.trySilentRefresh(context)
     if (!renewResult.success) {
+        if (renewResult.message == "统一认证主登录态已失效，请重新登录") {
+            AuthSessionManager.setLoggedInState(context, false)
+        }
         return UserCenterFetchResult(message = renewResult.message)
     }
-    return fetchUserCenterProfileOnce(context)
+    val secondAttempt = fetchUserCenterProfileOnce(context)
+    if (secondAttempt.profile != null) {
+        AuthSessionManager.setLoggedInState(context, true)
+    } else if (secondAttempt.message == "当前登录态已失效，请重新登录") {
+        AuthSessionManager.setLoggedInState(context, false)
+    }
+    return secondAttempt
 }
 
 private suspend fun fetchUserCenterProfileOnce(context: Context): UserCenterFetchResult {

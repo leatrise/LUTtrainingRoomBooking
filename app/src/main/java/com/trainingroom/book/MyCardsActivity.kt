@@ -258,7 +258,7 @@ private fun MyCardsScreen(
             return@LaunchedEffect
         }
 
-        if (!hasLocalLoginState(context)) {
+        if (!AuthSessionManager.isLoggedIn(context)) {
             isLookingUp = false
             lookupMessage = "当前未登录，无法验证真实性，但仍可手动填写姓名后保存。"
             lookupTone = NoticeTone.Warning
@@ -375,13 +375,28 @@ private fun MyCardsScreen(
                     IconButton(
                         onClick = {
                             scope.launch {
+                                val hasUnverifiedCards = savedCards.any {
+                                    it.verificationStatus == CardVerificationStatus.OfflineUnverified
+                                }
+                                if (!hasUnverifiedCards) {
+                                    Toast.makeText(context, "当前无未验证卡片", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                if (!AuthSessionManager.isLoggedIn(context)) {
+                                    Toast.makeText(context, "当前未登录，无法一键验证", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                if (!isNetworkAvailable(context)) {
+                                    Toast.makeText(context, "当前无网络，无法一键验证", Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
                                 isBulkVerifying = true
                                 val result = verifyUnverifiedCards(context, savedCards)
                                 savedCards = result.cards
                                 isBulkVerifying = false
                                 val message = when {
                                     result.successCount == 0 && result.failedCount == 0 ->
-                                        "当前没有可验证的卡片"
+                                        "请求异常，请确认登录正常或稍后重试"
                                     result.nameMismatchCount > 0 ->
                                         "${result.successCount} 个验证成功，${result.failedCount} 个验证失败，其中 ${result.nameMismatchCount} 个姓名不匹配"
                                     else ->
@@ -508,8 +523,13 @@ private fun MyCardsScreen(
                     val normalizedStudentId = studentId.trim()
                     val normalizedName = name.trim()
                     val normalizedNote = note.trim()
+                    val shouldPreserveVerifiedStatus =
+                        editingOriginalStudentId != null &&
+                            normalizedStudentId == editingOriginalStudentId &&
+                            currentVerificationStatus == CardVerificationStatus.Verified
                     val effectiveVerificationStatus = when {
-                        !hasLocalLoginState(context) -> CardVerificationStatus.OfflineUnverified
+                        shouldPreserveVerifiedStatus -> CardVerificationStatus.Verified
+                        !AuthSessionManager.isLoggedIn(context) -> CardVerificationStatus.OfflineUnverified
                         !isNetworkAvailable(context) -> CardVerificationStatus.OfflineUnverified
                         else -> currentVerificationStatus
                     }
@@ -944,12 +964,6 @@ private fun CardField(label: String, value: String) {
     }
 }
 
-private fun hasLocalLoginState(context: Context): Boolean {
-    val loginSource = AuthSessionManager.loginSource(context)
-    val cookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
-    return loginSource != null || !cookieHeader.isNullOrBlank()
-}
-
 private fun isNetworkAvailable(context: Context): Boolean {
     val connectivityManager =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -974,7 +988,7 @@ private fun CardVerificationStatus.label() = when (this) {
 }
 
 private fun defaultLookupMessage(context: Context): String {
-    return if (hasLocalLoginState(context)) {
+    return if (AuthSessionManager.isLoggedIn(context)) {
         "输入学号后会自动查找并填充姓名。"
     } else {
         "当前未登录，无法验证真实性，但仍可手动填写信息。"
@@ -982,7 +996,7 @@ private fun defaultLookupMessage(context: Context): String {
 }
 
 private fun defaultLookupTone(context: Context): NoticeTone {
-    return if (hasLocalLoginState(context)) NoticeTone.Info else NoticeTone.Warning
+    return if (AuthSessionManager.isLoggedIn(context)) NoticeTone.Info else NoticeTone.Warning
 }
 
 private fun defaultDraftVerificationStatus(context: Context): CardVerificationStatus {
@@ -1051,7 +1065,7 @@ private suspend fun verifyUnverifiedCards(
     context: Context,
     cards: List<SavedCard>
 ): BulkVerifyResult {
-    if (!hasLocalLoginState(context) || !isNetworkAvailable(context)) {
+    if (!AuthSessionManager.isLoggedIn(context) || !isNetworkAvailable(context)) {
         return BulkVerifyResult(cards = cards, successCount = 0, failedCount = 0, nameMismatchCount = 0)
     }
 
@@ -1181,10 +1195,10 @@ private suspend fun lookupCardOwnerOnce(
     return withContext(Dispatchers.IO) {
         AuthSessionManager.install(context)
         val rawCookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
-        if (!hasLocalLoginState(context)) {
+        if (!AuthSessionManager.isLoggedIn(context)) {
             return@withContext CardLookupResult(
                 status = CardLookupStatus.LoginRequired,
-                message = "当前未登录，无法验证真实性，但仍可手动填写姓名后保存。"
+                message = "当前未登录，无法验证真实性，但仍可手动填写信息。"
             )
         }
 

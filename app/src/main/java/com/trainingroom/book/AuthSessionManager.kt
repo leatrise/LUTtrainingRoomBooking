@@ -12,6 +12,7 @@ import java.net.URI
 object AuthSessionManager {
     private const val PREFS_NAME = "auth_session"
     private const val KEY_COOKIES = "cookies"
+    private const val KEY_IS_LOGGED_IN = "is_logged_in"
     private const val KEY_LAST_USER_CENTER_URL = "last_user_center_url"
     private const val KEY_WEIXINLIB_COOKIE_HEADER = "weixinlib_cookie_header"
     private const val KEY_LOGIN_SOURCE = "login_source"
@@ -39,6 +40,7 @@ object AuthSessionManager {
         persistCookies(context)
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
+            .putBoolean(KEY_IS_LOGGED_IN, true)
             .putString(KEY_LAST_USER_CENTER_URL, userCenterUrl)
             .putString(KEY_LOGIN_SOURCE, loginSource)
             .apply()
@@ -53,6 +55,17 @@ object AuthSessionManager {
     fun loginSource(context: Context): String? =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_LOGIN_SOURCE, null)
+
+    fun setLoggedInState(context: Context, isLoggedIn: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_IS_LOGGED_IN, isLoggedIn)
+            .apply()
+    }
+
+    fun isLoggedIn(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_IS_LOGGED_IN, false)
 
     fun isSsoLogin(context: Context): Boolean =
         loginSource(context) == LOGIN_SOURCE_SSO
@@ -76,6 +89,7 @@ object AuthSessionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_COOKIES)
+            .remove(KEY_IS_LOGGED_IN)
             .remove(KEY_LAST_USER_CENTER_URL)
             .remove(KEY_WEIXINLIB_COOKIE_HEADER)
             .remove(KEY_LOGIN_SOURCE)
