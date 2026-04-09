@@ -397,10 +397,17 @@ private fun MyCardsScreen(
                                 val message = when {
                                     result.successCount == 0 && result.failedCount == 0 ->
                                         "请求异常，请确认登录正常或稍后重试"
-                                    result.nameMismatchCount > 0 ->
-                                        "${result.successCount} 个验证成功，${result.failedCount} 个验证失败，其中 ${result.nameMismatchCount} 个姓名不匹配"
-                                    else ->
-                                        "${result.successCount} 个验证成功，${result.failedCount} 个验证失败"
+                                    else -> buildList {
+                                        if (result.successCount > 0) {
+                                            add("${result.successCount} 个验证成功")
+                                        }
+                                        if (result.failedCount > 0) {
+                                            add("${result.failedCount} 个验证失败")
+                                        }
+                                        if (result.nameMismatchCount > 0) {
+                                            add("${result.nameMismatchCount} 个姓名不匹配")
+                                        }
+                                    }.joinToString("，")
                                 }
                                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }
