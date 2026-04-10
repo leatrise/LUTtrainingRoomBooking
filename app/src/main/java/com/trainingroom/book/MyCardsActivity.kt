@@ -213,6 +213,42 @@ private fun MyCardsScreen(
     var lookupRequestVersion by remember { mutableStateOf(0) }
     var isBulkVerifying by remember { mutableStateOf(false) }
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val currentLoginUserInfo = AuthSessionManager.getLoggedInUserInfo()
+
+    LaunchedEffect(currentLoginUserInfo?.userCode, currentLoginUserInfo?.username) {
+        val loginUserCode = currentLoginUserInfo?.userCode?.trim().orEmpty()
+        val loginUsername = currentLoginUserInfo?.username?.trim().orEmpty()
+        if (loginUserCode.isBlank() || loginUsername.isBlank()) {
+            return@LaunchedEffect
+        }
+
+        val matchedCard = savedCards.firstOrNull { it.studentId == loginUserCode }
+        savedCards = if (matchedCard == null) {
+            upsertSavedCard(
+                context = context,
+                card = SavedCard(
+                    studentId = loginUserCode,
+                    name = loginUsername,
+                    note = "",
+                    verificationStatus = CardVerificationStatus.Verified,
+                    verificationMessage = "已验证"
+                )
+            )
+        } else if (matchedCard.verificationStatus != CardVerificationStatus.Verified) {
+            upsertSavedCard(
+                context = context,
+                card = matchedCard.copy(
+                    name = loginUsername,
+                    note = matchedCard.note,
+                    verificationStatus = CardVerificationStatus.Verified,
+                    verificationMessage = "已验证"
+                ),
+                originalStudentId = matchedCard.studentId
+            )
+        } else {
+            savedCards
+        }
+    }
 
     fun resetEditorState() {
         studentId = ""
@@ -442,6 +478,7 @@ private fun MyCardsScreen(
                 items(savedCards, key = { it.studentId }) { card ->
                     SavedCardItem(
                         card = card,
+                        currentLoginUserCode = currentLoginUserInfo?.userCode,
                         onEdit = {
                             editingOriginalStudentId = card.studentId
                             studentId = card.studentId
@@ -815,11 +852,13 @@ private fun EmptyCardsPlaceholder() {
 @Composable
 private fun SavedCardItem(
     card: SavedCard,
+    currentLoginUserCode: String?,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val title = card.note.ifBlank { card.name }
     val showNameSubtitle = card.note.isNotBlank()
+    val isCurrentLoginUser = card.studentId == currentLoginUserCode
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -856,7 +895,8 @@ private fun SavedCardItem(
                         )
                         VerificationBadge(
                             status = card.verificationStatus,
-                            message = card.verificationMessage
+                            message = card.verificationMessage,
+                            isCurrentLoginUser = isCurrentLoginUser
                         )
                     }
                     if (showNameSubtitle) {
@@ -891,11 +931,19 @@ private fun SavedCardItem(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                    IconButton(
+                        onClick = onDelete,
+                        enabled = !isCurrentLoginUser,
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = "删除卡片",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = if (isCurrentLoginUser) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            }
                         )
                     }
                 }
@@ -905,10 +953,14 @@ private fun SavedCardItem(
 }
 
 @Composable
-private fun VerificationBadge(status: CardVerificationStatus, message: String?) {
+private fun VerificationBadge(
+    status: CardVerificationStatus,
+    message: String?,
+    isCurrentLoginUser: Boolean = false
+) {
     val style = when (status) {
         CardVerificationStatus.Verified -> VerificationBadgeStyle(
-            label = "已验证",
+            label = if (isCurrentLoginUser) "当前登录人" else "已验证",
             icon = Icons.Filled.CheckCircle,
             containerColor = Color(0xFFE8F5E9),
             contentColor = Color(0xFF1B5E20)
@@ -1350,6 +1402,7 @@ private fun MyCardsScreenPreview() {
                 items(previewSavedCards, key = { it.studentId }) { card ->
                     SavedCardItem(
                         card = card,
+                        currentLoginUserCode = "202300101",
                         onEdit = {},
                         onDelete = {}
                     )
