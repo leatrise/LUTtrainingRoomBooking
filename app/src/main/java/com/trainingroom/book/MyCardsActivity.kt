@@ -232,23 +232,49 @@ private fun MyCardsScreen(
     val lazyListState = rememberLazyListState()
     val hapticFeedback = LocalHapticFeedback.current
     val currentLoginUserInfo = AuthSessionManager.getLoggedInUserInfo()
+    val currentLoginUserCode = currentLoginUserInfo?.userCode?.trim()?.ifBlank { null }
+    val pinnedLoginCard = currentLoginUserCode?.let { loginUserCode ->
+        savedCards.firstOrNull { it.studentId == loginUserCode }
+    }
+    val reorderableSavedCards = if (currentLoginUserCode == null) {
+        savedCards
+    } else {
+        savedCards.filterNot { it.studentId == currentLoginUserCode }
+    }
     val reorderableLazyListState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
         scrollThresholdPadding = WindowInsets.systemBars.asPaddingValues()
     ) { from, to ->
         val fromStudentId = from.key as? String ?: return@rememberReorderableLazyListState
         val toStudentId = to.key as? String ?: return@rememberReorderableLazyListState
-        val fromIndex = savedCards.indexOfFirst { it.studentId == fromStudentId }
-        val toIndex = savedCards.indexOfFirst { it.studentId == toStudentId }
-        if (fromIndex !in savedCards.indices || toIndex !in savedCards.indices || fromIndex == toIndex) {
+        val fromIndex = reorderableSavedCards.indexOfFirst { it.studentId == fromStudentId }
+        val toIndex = reorderableSavedCards.indexOfFirst { it.studentId == toStudentId }
+        if (
+            fromIndex !in reorderableSavedCards.indices ||
+            toIndex !in reorderableSavedCards.indices ||
+            fromIndex == toIndex
+        ) {
             return@rememberReorderableLazyListState
         }
-        val reorderedCards = savedCards.toMutableList().apply {
+        val reorderedCards = reorderableSavedCards.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
-        }.reassignSavedCardSort()
-        savedCards = reorderedCards
-        persistSavedCards(context, reorderedCards)
+        }
+        val updatedCards = mergePinnedCardAndReassignSort(
+            pinnedCard = pinnedLoginCard,
+            orderedCards = reorderedCards
+        )
+        savedCards = updatedCards
+        persistSavedCards(context, updatedCards)
         hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+    }
+
+    LaunchedEffect(currentLoginUserCode) {
+        if (currentLoginUserCode.isNullOrBlank()) return@LaunchedEffect
+        val normalizedCards = savedCards.normalizeSavedCardSort(currentLoginUserCode)
+        if (normalizedCards != savedCards) {
+            savedCards = normalizedCards
+            persistSavedCards(context, normalizedCards)
+        }
     }
 
     LaunchedEffect(currentLoginUserInfo?.userCode, currentLoginUserInfo?.username) {
@@ -295,13 +321,15 @@ private fun MyCardsScreen(
         savedCards = if (matchedCard == null) {
             upsertSavedCard(
                 context = context,
-                card = finalCard
+                card = finalCard,
+                pinnedStudentId = currentLoginUserCode
             )
         } else if (finalCard != matchedCard) {
             upsertSavedCard(
                 context = context,
                 card = finalCard,
-                originalStudentId = matchedCard.studentId
+                originalStudentId = matchedCard.studentId,
+                pinnedStudentId = currentLoginUserCode
             )
         } else {
             savedCards
@@ -537,15 +565,44 @@ private fun MyCardsScreen(
                     EmptyCardsPlaceholder()
                 }
             } else {
-                items(savedCards, key = { it.studentId }) { card ->
+                pinnedLoginCard?.let { card ->
+                    item(key = card.studentId) {
+                        StaticSavedCardItem(
+                            card = card,
+                            currentLoginUserCode = currentLoginUserCode,
+                            onEdit = {
+                                editingOriginalStudentId = card.studentId
+                                studentId = card.studentId
+                                name = card.name
+                                note = card.note
+                                userUnit = card.userUnit
+                                userType = card.userType
+                                saveMessage = null
+                                saveTone = NoticeTone.Success
+                                lookupMessage = "离开学号输入框后可重新验证姓名。"
+                                lookupTone = NoticeTone.Info
+                                autoFilledStudentId = card.studentId
+                                currentVerificationStatus = card.verificationStatus
+                                requestedLookupStudentId = null
+                                lookupRequestVersion = 0
+                                showAddSheet = true
+                            },
+                            onDelete = {
+                                pendingDeleteCard = card
+                            }
+                        )
+                    }
+                }
+                items(reorderableSavedCards, key = { it.studentId }) { card ->
                     ReorderableItem(
                         state = reorderableLazyListState,
                         key = card.studentId
                     ) { isDragging ->
                         SavedCardItem(
                             card = card,
-                            currentLoginUserCode = currentLoginUserInfo?.userCode,
+                            currentLoginUserCode = currentLoginUserCode,
                             isDragging = isDragging,
+                            dragEnabled = true,
                             onDragStart = {
                                 hapticFeedback.performHapticFeedback(
                                     HapticFeedbackType.GestureThresholdActivate
@@ -667,6 +724,7 @@ private fun MyCardsScreen(
                             savedCards = upsertSavedCard(
                                 context = context,
                                 originalStudentId = editingOriginalStudentId,
+                                pinnedStudentId = currentLoginUserCode,
                                 card = SavedCard(
                                     studentId = normalizedStudentId,
                                     name = normalizedName,
@@ -709,7 +767,11 @@ private fun MyCardsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        savedCards = deleteSavedCard(context, card.studentId)
+                        savedCards = deleteSavedCard(
+                            context = context,
+                            studentId = card.studentId,
+                            pinnedStudentId = currentLoginUserCode
+                        )
                         pendingDeleteCard = null
                     }
                 ) {
@@ -939,37 +1001,79 @@ private fun EmptyCardsPlaceholder() {
 }
 
 @Composable
+private fun StaticSavedCardItem(
+    card: SavedCard,
+    currentLoginUserCode: String?,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    SavedCardItemContainer(
+        modifier = Modifier.fillMaxWidth(),
+        card = card,
+        currentLoginUserCode = currentLoginUserCode,
+        isDragging = false,
+        onEdit = onEdit,
+        onDelete = onDelete
+    )
+}
+
+@Composable
 private fun ReorderableCollectionItemScope.SavedCardItem(
     card: SavedCard,
     currentLoginUserCode: String?,
     isDragging: Boolean,
+    dragEnabled: Boolean,
     onDragStart: () -> Unit,
     onDragEnd: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val title = card.note.ifBlank { card.name }
-    val showNameSubtitle = card.note.isNotBlank()
-    val isCurrentLoginUser = card.studentId == currentLoginUserCode
     val interactionSource = remember { MutableInteractionSource() }
     val cardElevation by animateDpAsState(
         targetValue = if (isDragging) 10.dp else 1.dp,
         label = "savedCardElevation"
     )
 
-    Card(
+    SavedCardItemContainer(
         modifier = Modifier
             .fillMaxWidth()
             .longPressDraggableHandle(
+                enabled = dragEnabled,
                 interactionSource = interactionSource,
                 onDragStarted = { onDragStart() },
                 onDragStopped = onDragEnd
             ),
+        card = card,
+        currentLoginUserCode = currentLoginUserCode,
+        isDragging = isDragging,
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
+        onEdit = onEdit,
+        onDelete = onDelete
+    )
+}
+
+@Composable
+private fun SavedCardItemContainer(
+    modifier: Modifier,
+    card: SavedCard,
+    currentLoginUserCode: String?,
+    isDragging: Boolean,
+    elevation: androidx.compose.material3.CardElevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val title = card.note.ifBlank { card.name }
+    val showNameSubtitle = card.note.isNotBlank()
+    val isCurrentLoginUser = card.studentId == currentLoginUserCode
+
+    Card(
+        modifier = Modifier
+            .then(modifier),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
+        elevation = elevation
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -1211,7 +1315,8 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
 private fun upsertSavedCard(
     context: Context,
     card: SavedCard,
-    originalStudentId: String? = null
+    originalStudentId: String? = null,
+    pinnedStudentId: String? = null
 ): List<SavedCard> {
     val updatedCards = buildList {
         add(card)
@@ -1221,16 +1326,20 @@ private fun upsertSavedCard(
                     (originalStudentId != null && it.studentId == originalStudentId)
             }
             .forEach { add(it) }
-    }.normalizeSavedCardSort()
+    }.normalizeSavedCardSort(pinnedStudentId)
 
     persistSavedCards(context, updatedCards)
     return updatedCards
 }
 
-private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard> {
+private fun deleteSavedCard(
+    context: Context,
+    studentId: String,
+    pinnedStudentId: String? = null
+): List<SavedCard> {
     val updatedCards = loadSavedCards(context)
         .filterNot { it.studentId == studentId }
-        .normalizeSavedCardSort()
+        .normalizeSavedCardSort(pinnedStudentId)
     persistSavedCards(context, updatedCards)
     return updatedCards
 }
@@ -1250,15 +1359,45 @@ private fun resolveSavedCardSort(
 private fun nextSortValue(cards: List<SavedCard>): Int =
     (cards.maxOfOrNull { it.sort } ?: 0) + 1
 
-private fun List<SavedCard>.normalizeSavedCardSort(): List<SavedCard> {
-    return this
+private fun List<SavedCard>.normalizeSavedCardSort(
+    pinnedStudentId: String? = null
+): List<SavedCard> {
+    val pinnedCard = pinnedStudentId?.let { studentId ->
+        firstOrNull { it.studentId == studentId }
+    }
+    val orderedCards = this
+        .filterNot { it.studentId == pinnedStudentId }
         .sortedBy { it.sort }
-        .mapIndexed { index, savedCard -> savedCard.copy(sort = index + 1) }
+    return buildList {
+        pinnedCard?.let { add(it.copy(sort = 1)) }
+        orderedCards.forEachIndexed { index, savedCard ->
+            add(savedCard.copy(sort = index + if (pinnedCard == null) 1 else 2))
+        }
+    }
 }
 
-private fun List<SavedCard>.reassignSavedCardSort(): List<SavedCard> {
-    return mapIndexed { index, savedCard ->
-        savedCard.copy(sort = index + 1)
+private fun List<SavedCard>.reassignSavedCardSort(
+    pinnedStudentId: String? = null
+): List<SavedCard> {
+    val pinnedCard = pinnedStudentId?.let { studentId ->
+        savedCards@ this.firstOrNull { it.studentId == studentId }
+    }
+    val orderedCards = this.filterNot { it.studentId == pinnedStudentId }
+    return mergePinnedCardAndReassignSort(
+        pinnedCard = pinnedCard,
+        orderedCards = orderedCards
+    )
+}
+
+private fun mergePinnedCardAndReassignSort(
+    pinnedCard: SavedCard?,
+    orderedCards: List<SavedCard>
+): List<SavedCard> {
+    return buildList {
+        pinnedCard?.let { add(it.copy(sort = 1)) }
+        orderedCards.forEachIndexed { index, savedCard ->
+            add(savedCard.copy(sort = index + if (pinnedCard == null) 1 else 2))
+        }
     }
 }
 
@@ -1572,6 +1711,7 @@ private fun LazyItemScope.PreviewSavedCardItem(
             card = card,
             currentLoginUserCode = "202300101",
             isDragging = isDragging,
+            dragEnabled = true,
             onDragStart = {},
             onDragEnd = {},
             onEdit = {},
