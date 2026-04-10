@@ -223,26 +223,47 @@ private fun MyCardsScreen(
         }
 
         val matchedCard = savedCards.firstOrNull { it.studentId == loginUserCode }
+        val baseCard = if (matchedCard == null) {
+            SavedCard(
+                studentId = loginUserCode,
+                name = loginUsername,
+                note = "",
+                verificationStatus = CardVerificationStatus.Verified,
+                verificationMessage = "已验证"
+            )
+        } else if (matchedCard.verificationStatus != CardVerificationStatus.Verified) {
+            matchedCard.copy(
+                name = loginUsername,
+                note = matchedCard.note,
+                verificationStatus = CardVerificationStatus.Verified,
+                verificationMessage = "已验证"
+            )
+        } else {
+            matchedCard
+        }
+
+        val shouldLookupMetadata =
+            baseCard.userUnit.isBlank() || baseCard.userType.isBlank()
+        val finalCard = if (shouldLookupMetadata) {
+            when (val lookupResult = lookupCardOwner(context, loginUserCode, loginUsername)) {
+                is CardLookupResult -> baseCard.copy(
+                    userUnit = lookupResult.userUnit.orEmpty().ifBlank { baseCard.userUnit },
+                    userType = lookupResult.userType.orEmpty().ifBlank { baseCard.userType }
+                )
+            }
+        } else {
+            baseCard
+        }
+
         savedCards = if (matchedCard == null) {
             upsertSavedCard(
                 context = context,
-                card = SavedCard(
-                    studentId = loginUserCode,
-                    name = loginUsername,
-                    note = "",
-                    verificationStatus = CardVerificationStatus.Verified,
-                    verificationMessage = "已验证"
-                )
+                card = finalCard
             )
-        } else if (matchedCard.verificationStatus != CardVerificationStatus.Verified) {
+        } else if (finalCard != matchedCard) {
             upsertSavedCard(
                 context = context,
-                card = matchedCard.copy(
-                    name = loginUsername,
-                    note = matchedCard.note,
-                    verificationStatus = CardVerificationStatus.Verified,
-                    verificationMessage = "已验证"
-                ),
+                card = finalCard,
                 originalStudentId = matchedCard.studentId
             )
         } else {
