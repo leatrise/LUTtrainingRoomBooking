@@ -138,6 +138,22 @@ private fun BookingEntryScreen(
     val selectedCards = remember(availableCards, effectiveSelectedCardIds) {
         availableCards.filter { it.studentId in effectiveSelectedCardIds }
     }
+    val selectedCardCount = selectedCards.size
+    val peopleRequirementMessage = remember(selectedCardCount, room.minCapacity, room.maxCapacity) {
+        when {
+            selectedCardCount < room.minCapacity ->
+                "当前 $selectedCardCount 人，还需 ${room.minCapacity - selectedCardCount} 人"
+            selectedCardCount > room.maxCapacity ->
+                "当前 $selectedCardCount 人，超出 ${selectedCardCount - room.maxCapacity} 人"
+            else ->
+                "当前 $selectedCardCount 人"
+        }
+    }
+    val peopleRequirementColor = when {
+        selectedCardCount < room.minCapacity -> MaterialTheme.colorScheme.error
+        selectedCardCount > room.maxCapacity -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
     val pickerOrderedCards = remember(availableCards) {
         availableCards.sortedWith(
             compareBy<BookingUseCard> { !it.isSelectable() }
@@ -422,6 +438,11 @@ private fun BookingEntryScreen(
                         )
                         Text("选择卡片", modifier = Modifier.padding(start = 8.dp))
                     }
+                    Text(
+                        text = peopleRequirementMessage,
+                        fontSize = 12.sp,
+                        color = peopleRequirementColor
+                    )
 
                     if (selectedCards.isEmpty()) {
                         Box(
@@ -499,7 +520,7 @@ private fun BookingEntryScreen(
                         modifier = Modifier.padding(top = 2.dp)
                     )
                     Text(
-                        text = "提交前请确认日期、时间段与使用卡片信息。后续这里会补充时段冲突、人数要求和预约说明。",
+                        text = "提交前请确认日期、时间段与使用卡片信息。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.86f)
                     )
