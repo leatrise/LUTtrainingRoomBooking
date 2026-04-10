@@ -9,6 +9,11 @@ import java.net.CookiePolicy
 import java.net.HttpCookie
 import java.net.URI
 
+data class AuthLoginUserInfo(
+    val userCode: String?,
+    val username: String
+)
+
 object AuthSessionManager {
     private const val PREFS_NAME = "auth_session"
     private const val KEY_COOKIES = "cookies"
@@ -23,6 +28,7 @@ object AuthSessionManager {
 
     private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
     private var installed = false
+    private var currentLoginUserInfo: AuthLoginUserInfo? = null
 
     fun install(context: Context) {
         if (!installed) {
@@ -61,6 +67,9 @@ object AuthSessionManager {
             .edit()
             .putBoolean(KEY_IS_LOGGED_IN, isLoggedIn)
             .apply()
+        if (!isLoggedIn) {
+            currentLoginUserInfo = null
+        }
     }
 
     fun isLoggedIn(context: Context): Boolean =
@@ -86,6 +95,7 @@ object AuthSessionManager {
 
     fun clear(context: Context) {
         cookieManager.cookieStore.removeAll()
+        currentLoginUserInfo = null
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_COOKIES)
@@ -210,4 +220,18 @@ object AuthSessionManager {
             }
         }
     }
+
+    fun syncLoggedInUserInfo(userCode: String?, username: String?) {
+        val normalizedUsername = username?.trim().orEmpty()
+        currentLoginUserInfo = if (normalizedUsername.isBlank()) {
+            null
+        } else {
+            AuthLoginUserInfo(
+                userCode = userCode?.trim()?.ifBlank { null },
+                username = normalizedUsername
+            )
+        }
+    }
+
+    fun getLoggedInUserInfo(): AuthLoginUserInfo? = currentLoginUserInfo
 }

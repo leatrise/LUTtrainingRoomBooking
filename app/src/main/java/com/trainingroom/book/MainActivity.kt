@@ -543,6 +543,10 @@ suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
     val firstAttempt = fetchUserCenterProfileOnce(context)
     if (firstAttempt.profile != null) {
         AuthSessionManager.setLoggedInState(context, true)
+        AuthSessionManager.syncLoggedInUserInfo(
+            userCode = firstAttempt.profile.userCode,
+            username = firstAttempt.profile.username
+        )
         return firstAttempt
     }
 
@@ -552,6 +556,7 @@ suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
     if (!shouldTrySilentRefresh) {
         if (firstAttempt.message == "当前登录态已失效，请重新登录") {
             AuthSessionManager.setLoggedInState(context, false)
+            AuthSessionManager.syncLoggedInUserInfo(userCode = null, username = null)
         }
         return firstAttempt
     }
@@ -566,8 +571,13 @@ suspend fun fetchUserCenterProfile(context: Context): UserCenterFetchResult {
     val secondAttempt = fetchUserCenterProfileOnce(context)
     if (secondAttempt.profile != null) {
         AuthSessionManager.setLoggedInState(context, true)
+        AuthSessionManager.syncLoggedInUserInfo(
+            userCode = secondAttempt.profile.userCode,
+            username = secondAttempt.profile.username
+        )
     } else if (secondAttempt.message == "当前登录态已失效，请重新登录") {
         AuthSessionManager.setLoggedInState(context, false)
+        AuthSessionManager.syncLoggedInUserInfo(userCode = null, username = null)
     }
     return secondAttempt
 }
