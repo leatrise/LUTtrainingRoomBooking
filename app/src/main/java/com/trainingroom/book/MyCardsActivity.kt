@@ -9,19 +9,25 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,7 +70,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,6 +87,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.net.HttpURLConnection
 import java.net.URLEncoder
 import java.net.URL
@@ -111,6 +122,7 @@ private data class SavedCard(
     val note: String,
     val userUnit: String = "",
     val userType: String = "",
+    val sort: Int = 0,
     val verificationStatus: CardVerificationStatus,
     val verificationMessage: String? = null
 )
@@ -120,12 +132,14 @@ private val previewSavedCards = listOf(
         studentId = "202300101",
         name = "张三",
         note = "训练室常用卡",
+        sort = 1,
         verificationStatus = CardVerificationStatus.Verified
     ),
     SavedCard(
         studentId = "202600401",
         name = "李四",
         note = "",
+        sort = 2,
         verificationStatus = CardVerificationStatus.OfflineUnverified
     )
 )
@@ -190,7 +204,9 @@ private fun MyCardsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showHint by rememberSaveable { mutableStateOf(true) }
-    var savedCards by remember(initialCards) { mutableStateOf(initialCards ?: loadSavedCards(context)) }
+    var savedCards by remember(initialCards) {
+        mutableStateOf((initialCards ?: loadSavedCards(context)).sortedBy { it.sort })
+    }
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var editingOriginalStudentId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDeleteCard by remember { mutableStateOf<SavedCard?>(null) }
@@ -213,7 +229,27 @@ private fun MyCardsScreen(
     var lookupRequestVersion by remember { mutableStateOf(0) }
     var isBulkVerifying by remember { mutableStateOf(false) }
     val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val lazyListState = rememberLazyListState()
+    val hapticFeedback = LocalHapticFeedback.current
     val currentLoginUserInfo = AuthSessionManager.getLoggedInUserInfo()
+    val reorderableLazyListState = rememberReorderableLazyListState(
+        lazyListState = lazyListState,
+        scrollThresholdPadding = WindowInsets.systemBars.asPaddingValues()
+    ) { from, to ->
+        val fromStudentId = from.key as? String ?: return@rememberReorderableLazyListState
+        val toStudentId = to.key as? String ?: return@rememberReorderableLazyListState
+        val fromIndex = savedCards.indexOfFirst { it.studentId == fromStudentId }
+        val toIndex = savedCards.indexOfFirst { it.studentId == toStudentId }
+        if (fromIndex !in savedCards.indices || toIndex !in savedCards.indices || fromIndex == toIndex) {
+            return@rememberReorderableLazyListState
+        }
+        val reorderedCards = savedCards.toMutableList().apply {
+            add(toIndex, removeAt(fromIndex))
+        }.reassignSavedCardSort()
+        savedCards = reorderedCards
+        persistSavedCards(context, reorderedCards)
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+    }
 
     LaunchedEffect(currentLoginUserInfo?.userCode, currentLoginUserInfo?.username) {
         val loginUserCode = currentLoginUserInfo?.userCode?.trim().orEmpty()
@@ -228,6 +264,7 @@ private fun MyCardsScreen(
                 studentId = loginUserCode,
                 name = loginUsername,
                 note = "",
+                sort = nextSortValue(savedCards),
                 verificationStatus = CardVerificationStatus.Verified,
                 verificationMessage = "已验证"
             )
@@ -396,6 +433,7 @@ private fun MyCardsScreen(
         }
     ) { innerPadding ->
         LazyColumn(
+            state = lazyListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -404,7 +442,10 @@ private fun MyCardsScreen(
         ) {
             if (showHint) {
                 item {
-                    CardsHintBar(onDismiss = { showHint = false })
+                    CardsHintBar(
+                        savedCardCount = savedCards.size,
+                        onDismiss = { showHint = false }
+                    )
                 }
             }
 
@@ -497,30 +538,44 @@ private fun MyCardsScreen(
                 }
             } else {
                 items(savedCards, key = { it.studentId }) { card ->
-                    SavedCardItem(
-                        card = card,
-                        currentLoginUserCode = currentLoginUserInfo?.userCode,
-                        onEdit = {
-                            editingOriginalStudentId = card.studentId
-                            studentId = card.studentId
-                            name = card.name
-                            note = card.note
-                            userUnit = card.userUnit
-                            userType = card.userType
-                            saveMessage = null
-                            saveTone = NoticeTone.Success
-                            lookupMessage = "离开学号输入框后可重新验证姓名。"
-                            lookupTone = NoticeTone.Info
-                            autoFilledStudentId = card.studentId
-                            currentVerificationStatus = card.verificationStatus
-                            requestedLookupStudentId = null
-                            lookupRequestVersion = 0
-                            showAddSheet = true
-                        },
-                        onDelete = {
-                            pendingDeleteCard = card
-                        }
-                    )
+                    ReorderableItem(
+                        state = reorderableLazyListState,
+                        key = card.studentId
+                    ) { isDragging ->
+                        SavedCardItem(
+                            card = card,
+                            currentLoginUserCode = currentLoginUserInfo?.userCode,
+                            isDragging = isDragging,
+                            onDragStart = {
+                                hapticFeedback.performHapticFeedback(
+                                    HapticFeedbackType.GestureThresholdActivate
+                                )
+                            },
+                            onDragEnd = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                            },
+                            onEdit = {
+                                editingOriginalStudentId = card.studentId
+                                studentId = card.studentId
+                                name = card.name
+                                note = card.note
+                                userUnit = card.userUnit
+                                userType = card.userType
+                                saveMessage = null
+                                saveTone = NoticeTone.Success
+                                lookupMessage = "离开学号输入框后可重新验证姓名。"
+                                lookupTone = NoticeTone.Info
+                                autoFilledStudentId = card.studentId
+                                currentVerificationStatus = card.verificationStatus
+                                requestedLookupStudentId = null
+                                lookupRequestVersion = 0
+                                showAddSheet = true
+                            },
+                            onDelete = {
+                                pendingDeleteCard = card
+                            }
+                        )
+                    }
                 }
             }
 
@@ -618,6 +673,11 @@ private fun MyCardsScreen(
                                     note = normalizedNote,
                                     userUnit = userUnit,
                                     userType = userType,
+                                    sort = resolveSavedCardSort(
+                                        existingCards = savedCards,
+                                        targetStudentId = normalizedStudentId,
+                                        originalStudentId = editingOriginalStudentId
+                                    ),
                                     verificationStatus = effectiveVerificationStatus,
                                     verificationMessage = when (effectiveVerificationStatus) {
                                         CardVerificationStatus.Verified -> "已验证"
@@ -666,7 +726,15 @@ private fun MyCardsScreen(
 }
 
 @Composable
-private fun CardsHintBar(onDismiss: () -> Unit) {
+private fun CardsHintBar(
+    savedCardCount: Int,
+    onDismiss: () -> Unit
+) {
+    val hintText = if (savedCardCount > 2) {
+        "长按卡片可直接拖拽排序"
+    } else {
+        "这里可以添加与管理您常用的卡片信息"
+    }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -685,7 +753,7 @@ private fun CardsHintBar(onDismiss: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "这里可以添加与管理您常用的卡片信息",
+                text = hintText,
                 modifier = Modifier.weight(1f),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
@@ -871,23 +939,37 @@ private fun EmptyCardsPlaceholder() {
 }
 
 @Composable
-private fun SavedCardItem(
+private fun ReorderableCollectionItemScope.SavedCardItem(
     card: SavedCard,
     currentLoginUserCode: String?,
+    isDragging: Boolean,
+    onDragStart: () -> Unit,
+    onDragEnd: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val title = card.note.ifBlank { card.name }
     val showNameSubtitle = card.note.isNotBlank()
     val isCurrentLoginUser = card.studentId == currentLoginUserCode
+    val interactionSource = remember { MutableInteractionSource() }
+    val cardElevation by animateDpAsState(
+        targetValue = if (isDragging) 10.dp else 1.dp,
+        label = "savedCardElevation"
+    )
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .longPressDraggableHandle(
+                interactionSource = interactionSource,
+                onDragStarted = { onDragStart() },
+                onDragStopped = onDragEnd
+            ),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -945,22 +1027,30 @@ private fun SavedCardItem(
                     modifier = Modifier.weight(1f)
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                    IconButton(
+                        onClick = onEdit,
+                        enabled = !isDragging,
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Edit,
                             contentDescription = "修改卡片",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isDragging) {
+                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                     IconButton(
                         onClick = onDelete,
-                        enabled = !isCurrentLoginUser,
+                        enabled = !isCurrentLoginUser && !isDragging,
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = "删除卡片",
-                            tint = if (isCurrentLoginUser) {
+                            tint = if (isCurrentLoginUser || isDragging) {
                                 MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                             } else {
                                 MaterialTheme.colorScheme.error
@@ -1107,6 +1197,7 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
                         note = note,
                         userUnit = userUnit,
                         userType = userType,
+                        sort = obj.optInt("sort", index + 1),
                         verificationStatus = verificationStatus,
                         verificationMessage = obj.optString("verificationMessage").trim().ifBlank { null }
                     )
@@ -1114,6 +1205,7 @@ private fun loadSavedCards(context: Context): List<SavedCard> {
             }
         }
     }.getOrElse { emptyList() }
+        .sortedBy { it.sort }
 }
 
 private fun upsertSavedCard(
@@ -1129,16 +1221,45 @@ private fun upsertSavedCard(
                     (originalStudentId != null && it.studentId == originalStudentId)
             }
             .forEach { add(it) }
-    }
+    }.normalizeSavedCardSort()
 
     persistSavedCards(context, updatedCards)
     return updatedCards
 }
 
 private fun deleteSavedCard(context: Context, studentId: String): List<SavedCard> {
-    val updatedCards = loadSavedCards(context).filterNot { it.studentId == studentId }
+    val updatedCards = loadSavedCards(context)
+        .filterNot { it.studentId == studentId }
+        .normalizeSavedCardSort()
     persistSavedCards(context, updatedCards)
     return updatedCards
+}
+
+private fun resolveSavedCardSort(
+    existingCards: List<SavedCard>,
+    targetStudentId: String,
+    originalStudentId: String?
+): Int {
+    val existingMatch = existingCards.firstOrNull {
+        it.studentId == targetStudentId ||
+            (originalStudentId != null && it.studentId == originalStudentId)
+    }
+    return existingMatch?.sort ?: nextSortValue(existingCards)
+}
+
+private fun nextSortValue(cards: List<SavedCard>): Int =
+    (cards.maxOfOrNull { it.sort } ?: 0) + 1
+
+private fun List<SavedCard>.normalizeSavedCardSort(): List<SavedCard> {
+    return this
+        .sortedBy { it.sort }
+        .mapIndexed { index, savedCard -> savedCard.copy(sort = index + 1) }
+}
+
+private fun List<SavedCard>.reassignSavedCardSort(): List<SavedCard> {
+    return mapIndexed { index, savedCard ->
+        savedCard.copy(sort = index + 1)
+    }
 }
 
 private suspend fun verifyUnverifiedCards(
@@ -1227,6 +1348,7 @@ private fun persistSavedCards(context: Context, cards: List<SavedCard>) {
                 put("note", savedCard.note)
                 put("userUnit", savedCard.userUnit)
                 put("userType", savedCard.userType)
+                put("sort", savedCard.sort)
                 put("verificationStatus", savedCard.verificationStatus.name)
                 put("verificationMessage", savedCard.verificationMessage)
             }
@@ -1395,19 +1517,25 @@ private fun isLoginLikeResponse(body: String, finalUrl: String): Boolean {
 @Preview(showBackground = true, widthDp = 420, heightDp = 900)
 @Composable
 private fun MyCardsScreenPreview() {
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState = lazyListState) { _, _ -> }
     MyApplicationTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             LazyColumn(
+                state = lazyListState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {
-                    CardsHintBar(onDismiss = {})
+                    CardsHintBar(
+                        savedCardCount = previewSavedCards.size,
+                        onDismiss = {}
+                    )
                 }
                 item {
                     AddCardEntryButton(onClick = {})
@@ -1421,14 +1549,33 @@ private fun MyCardsScreenPreview() {
                     )
                 }
                 items(previewSavedCards, key = { it.studentId }) { card ->
-                    SavedCardItem(
+                    PreviewSavedCardItem(
                         card = card,
-                        currentLoginUserCode = "202300101",
-                        onEdit = {},
-                        onDelete = {}
+                        reorderableState = reorderableState
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LazyItemScope.PreviewSavedCardItem(
+    card: SavedCard,
+    reorderableState: sh.calvin.reorderable.ReorderableLazyListState
+) {
+    ReorderableItem(
+        state = reorderableState,
+        key = card.studentId
+    ) { isDragging ->
+        SavedCardItem(
+            card = card,
+            currentLoginUserCode = "202300101",
+            isDragging = isDragging,
+            onDragStart = {},
+            onDragEnd = {},
+            onEdit = {},
+            onDelete = {}
+        )
     }
 }
