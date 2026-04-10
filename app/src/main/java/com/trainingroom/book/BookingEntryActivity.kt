@@ -108,6 +108,10 @@ private fun BookingEntryScreen(
     onBack: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val currentLoginUserCode = AuthSessionManager.getLoggedInUserInfo()
+        ?.userCode
+        ?.trim()
+        ?.ifBlank { null }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
@@ -119,26 +123,55 @@ private fun BookingEntryScreen(
     var showCardPickerSheet by remember { mutableStateOf(false) }
     var availableCards by remember { mutableStateOf(loadBookingSavedCards(context)) }
     var selectedCardIds by remember { mutableStateOf(setOf<String>()) }
-    val selectedCards = remember(availableCards, selectedCardIds) {
-        availableCards.filter { it.studentId in selectedCardIds }
+    val selectableCardIds = remember(availableCards) {
+        availableCards.filter { it.isSelectable() }.map { it.studentId }.toSet()
+    }
+    val lockedSelectedCardIds = remember(availableCards, currentLoginUserCode) {
+        availableCards
+            .filter { it.studentId == currentLoginUserCode && it.isSelectable() }
+            .map { it.studentId }
+            .toSet()
+    }
+    val effectiveSelectedCardIds = remember(selectedCardIds, lockedSelectedCardIds, selectableCardIds) {
+        (selectedCardIds intersect selectableCardIds) + lockedSelectedCardIds
+    }
+    val selectedCards = remember(availableCards, effectiveSelectedCardIds) {
+        availableCards.filter { it.studentId in effectiveSelectedCardIds }
     }
     val cardPickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    androidx.compose.runtime.LaunchedEffect(lockedSelectedCardIds, selectableCardIds) {
+        val normalizedSelected = (selectedCardIds intersect selectableCardIds) + lockedSelectedCardIds
+        if (normalizedSelected != selectedCardIds) {
+            selectedCardIds = normalizedSelected
+        }
+    }
+
     if (showCardPickerSheet) {
-        var tempSelectedIds by remember(selectedCardIds, availableCards) {
-            mutableStateOf(selectedCardIds.intersect(availableCards.map { it.studentId }.toSet()))
+        var tempSelectedIds by remember(effectiveSelectedCardIds, selectableCardIds, lockedSelectedCardIds) {
+            mutableStateOf(
+                (effectiveSelectedCardIds intersect selectableCardIds) + lockedSelectedCardIds
+            )
         }
         ModalBottomSheet(
             onDismissRequest = { showCardPickerSheet = false },
             sheetState = cardPickerSheetState
         ) {
             BookingCardPickerSheetContent(
+                onOpenMyCards = {
+                    context.startActivity(MyCardsActivity.createIntent(context))
+                },
                 availableCards = availableCards,
                 selectedCardIds = tempSelectedIds,
-                onToggleCard = { cardId -> tempSelectedIds = tempSelectedIds.toggle(cardId) },
+                lockedCardIds = lockedSelectedCardIds,
+                onToggleCard = { cardId ->
+                    if (cardId !in lockedSelectedCardIds && cardId in selectableCardIds) {
+                        tempSelectedIds = tempSelectedIds.toggle(cardId)
+                    }
+                },
                 onDismiss = { showCardPickerSheet = false },
                 onConfirm = {
-                    selectedCardIds = tempSelectedIds
+                    selectedCardIds = (tempSelectedIds intersect selectableCardIds) + lockedSelectedCardIds
                     showCardPickerSheet = false
                 }
             )
@@ -391,7 +424,11 @@ private fun BookingEntryScreen(
                                 .padding(vertical = 8.dp)
                         ) {
                             Text(
-                                text = if (availableCards.isEmpty()) "暂无已保存卡片" else "暂未选择使用卡片",
+                                text = when {
+                                    availableCards.isEmpty() -> "暂无已保存卡片"
+                                    selectableCardIds.isEmpty() -> "暂无联网验证成功的可选卡片"
+                                    else -> "暂未选择使用卡片"
+                                },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -480,7 +517,9 @@ private data class BookingUseCard(
     val name: String,
     val note: String,
     val userUnit: String = "",
-    val userType: String = ""
+    val userType: String = "",
+    val verificationStatus: String = "",
+    val verificationMessage: String? = null
 )
 
 private const val BOOKING_CARD_PREFS_NAME = "saved_cards"
@@ -505,7 +544,9 @@ private fun loadBookingSavedCards(context: Context): List<BookingUseCard> {
                         name = item.optString("name").trim(),
                         note = item.optString("note").trim(),
                         userUnit = item.optString("userUnit").trim(),
-                        userType = item.optString("userType").trim()
+                        userType = item.optString("userType").trim(),
+                        verificationStatus = item.optString("verificationStatus").trim(),
+                        verificationMessage = item.optString("verificationMessage").trim().ifBlank { null }
                     )
                 )
             }
@@ -535,10 +576,14 @@ private fun BookingUseCard.displaySummary(): String {
     return parts.joinToString(" · ")
 }
 
+private fun BookingUseCard.isSelectable(): Boolean = verificationStatus == "Verified"
+
 @Composable
 private fun BookingCardPickerSheetContent(
+    onOpenMyCards: () -> Unit,
     availableCards: List<BookingUseCard>,
     selectedCardIds: Set<String>,
+    lockedCardIds: Set<String>,
     onToggleCard: (String) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
@@ -549,12 +594,21 @@ private fun BookingCardPickerSheetContent(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "选择卡片",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "选择卡片",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            OutlinedButton(onClick = onOpenMyCards) {
+                Text("我的卡包")
+            }
+        }
         Text(
             text = "勾选需要参与本次预约的卡片信息。",
             fontSize = 13.sp,
@@ -569,7 +623,7 @@ private fun BookingCardPickerSheetContent(
                 )
             ) {
                 Text(
-                    text = "“我的卡片”中还没有可用卡片，请先去个人中心添加。",
+                    text = "“我的卡包”中还没有可用卡片，请先添加",
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -578,14 +632,17 @@ private fun BookingCardPickerSheetContent(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 500.dp),
+                    .heightIn(max = 560.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(availableCards, key = { it.studentId }) { card ->
+                    val isLocked = card.studentId in lockedCardIds
+                    val isSelectable = card.isSelectable()
+                    val isInteractive = isSelectable && !isLocked
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onToggleCard(card.studentId) },
+                            .clickable(enabled = isInteractive) { onToggleCard(card.studentId) },
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                         ),
@@ -600,6 +657,7 @@ private fun BookingCardPickerSheetContent(
                         ) {
                             Checkbox(
                                 checked = card.studentId in selectedCardIds,
+                                enabled = isInteractive,
                                 onCheckedChange = { onToggleCard(card.studentId) }
                             )
                             Column(
@@ -617,6 +675,19 @@ private fun BookingCardPickerSheetContent(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
                                 )
+                                if (isLocked) {
+                                    Text(
+                                        text = "当前登录人，不可取消",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else if (!isSelectable) {
+                                    Text(
+                                        text = card.verificationMessage ?: "未联网验证成功，暂不可选",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                     }
@@ -685,21 +756,27 @@ private fun BookingCardPickerSheetContentPreview() {
             name = "张三",
             note = "主预约人",
             userUnit = "计算机学院",
-            userType = "本科生"
+            userType = "本科生",
+            verificationStatus = "Verified",
+            verificationMessage = "已验证"
         ),
         BookingUseCard(
             studentId = "202400101",
             name = "李四",
             note = "学弟",
             userUnit = "计算机学院",
-            userType = "本科生"
+            userType = "本科生",
+            verificationStatus = "Verified",
+            verificationMessage = "已验证"
         ),
         BookingUseCard(
             studentId = "202400201",
             name = "王五",
             note = "",
             userUnit = "经济管理学院",
-            userType = "本科生"
+            userType = "本科生",
+            verificationStatus = "OfflineUnverified",
+            verificationMessage = "未验证（离线添加）"
         )
     )
 
@@ -709,8 +786,10 @@ private fun BookingCardPickerSheetContentPreview() {
             color = MaterialTheme.colorScheme.surface
         ) {
             BookingCardPickerSheetContent(
+                onOpenMyCards = {},
                 availableCards = previewCards,
                 selectedCardIds = selectedIds,
+                lockedCardIds = setOf("230165201055"),
                 onToggleCard = { cardId -> selectedIds = selectedIds.toggle(cardId) },
                 onDismiss = {},
                 onConfirm = {}
