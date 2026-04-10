@@ -138,6 +138,12 @@ private fun BookingEntryScreen(
     val selectedCards = remember(availableCards, effectiveSelectedCardIds) {
         availableCards.filter { it.studentId in effectiveSelectedCardIds }
     }
+    val pickerOrderedCards = remember(availableCards) {
+        availableCards.sortedWith(
+            compareBy<BookingUseCard> { !it.isSelectable() }
+                .thenBy { it.sort }
+        )
+    }
     val cardPickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     androidx.compose.runtime.LaunchedEffect(lockedSelectedCardIds, selectableCardIds) {
@@ -161,7 +167,7 @@ private fun BookingEntryScreen(
                 onOpenMyCards = {
                     context.startActivity(MyCardsActivity.createIntent(context))
                 },
-                availableCards = availableCards,
+                availableCards = pickerOrderedCards,
                 selectedCardIds = tempSelectedIds,
                 lockedCardIds = lockedSelectedCardIds,
                 onToggleCard = { cardId ->
@@ -518,6 +524,7 @@ private data class BookingUseCard(
     val note: String,
     val userUnit: String = "",
     val userType: String = "",
+    val sort: Int = 0,
     val verificationStatus: String = "",
     val verificationMessage: String? = null
 )
@@ -545,6 +552,7 @@ private fun loadBookingSavedCards(context: Context): List<BookingUseCard> {
                         note = item.optString("note").trim(),
                         userUnit = item.optString("userUnit").trim(),
                         userType = item.optString("userType").trim(),
+                        sort = item.optInt("sort", index + 1),
                         verificationStatus = item.optString("verificationStatus").trim(),
                         verificationMessage = item.optString("verificationMessage").trim().ifBlank { null }
                     )
@@ -552,6 +560,7 @@ private fun loadBookingSavedCards(context: Context): List<BookingUseCard> {
             }
         }
     }.getOrDefault(emptyList())
+        .sortedBy { it.sort }
 }
 
 private fun Set<String>.toggle(studentId: String): Set<String> {
@@ -757,6 +766,7 @@ private fun BookingCardPickerSheetContentPreview() {
             note = "主预约人",
             userUnit = "计算机学院",
             userType = "本科生",
+            sort = 1,
             verificationStatus = "Verified",
             verificationMessage = "已验证"
         ),
@@ -766,6 +776,7 @@ private fun BookingCardPickerSheetContentPreview() {
             note = "学弟",
             userUnit = "计算机学院",
             userType = "本科生",
+            sort = 2,
             verificationStatus = "Verified",
             verificationMessage = "已验证"
         ),
@@ -775,6 +786,7 @@ private fun BookingCardPickerSheetContentPreview() {
             note = "",
             userUnit = "经济管理学院",
             userType = "本科生",
+            sort = 3,
             verificationStatus = "OfflineUnverified",
             verificationMessage = "未验证（离线添加）"
         )
@@ -789,7 +801,7 @@ private fun BookingCardPickerSheetContentPreview() {
                 onOpenMyCards = {},
                 availableCards = previewCards,
                 selectedCardIds = selectedIds,
-                lockedCardIds = setOf("230165201055"),
+                lockedCardIds = setOf("202300101"),
                 onToggleCard = { cardId -> selectedIds = selectedIds.toggle(cardId) },
                 onDismiss = {},
                 onConfirm = {}
