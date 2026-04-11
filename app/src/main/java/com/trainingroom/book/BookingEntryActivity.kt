@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import com.trainingroom.book.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -120,6 +122,7 @@ private fun BookingEntryScreen(
     onBack: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     val currentLoginUserCode = AuthSessionManager.getLoggedInUserInfo()
         ?.userCode
         ?.trim()
@@ -132,6 +135,9 @@ private fun BookingEntryScreen(
     var timeValidationState by remember {
         mutableStateOf(BookingTimeValidationState.idle("请选择预约日期和时间"))
     }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var showSubmitConfirmDialog by remember { mutableStateOf(false) }
+    var submitResultDialogState by remember { mutableStateOf<BookingSubmitDialogState?>(null) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var showStartTimePickerDialog by remember { mutableStateOf(false) }
     var showEndTimePickerDialog by remember { mutableStateOf(false) }
@@ -154,6 +160,12 @@ private fun BookingEntryScreen(
         availableCards.filter { it.studentId in effectiveSelectedCardIds }
     }
     val selectedCardCount = selectedCards.size
+    val submitEnabled = remember(selectedCards, selectedCardCount, timeValidationState, isSubmitting) {
+        !isSubmitting &&
+            timeValidationState.isBookable &&
+            selectedCardCount in room.minCapacity..room.maxCapacity &&
+            selectedCards.isNotEmpty()
+    }
     val peopleRequirementMessage = remember(selectedCardCount, room.minCapacity, room.maxCapacity) {
         when {
             selectedCardCount < room.minCapacity ->
@@ -327,6 +339,75 @@ private fun BookingEntryScreen(
             },
             text = {
                 TimePicker(state = endTimePickerState)
+            }
+        )
+    }
+
+    submitResultDialogState?.let { dialogState ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                submitResultDialogState = null
+                if (dialogState.success) {
+                    onBack()
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        submitResultDialogState = null
+                        if (dialogState.success) {
+                            onBack()
+                        }
+                    }
+                ) {
+                    Text("确定")
+                }
+            },
+            title = { Text(if (dialogState.success) "预约提交结果" else "提交失败") },
+            text = { Text(dialogState.message) }
+        )
+    }
+
+    if (showSubmitConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSubmitConfirmDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSubmitConfirmDialog = false
+                        isSubmitting = true
+                        scope.launch {
+                            val result = submitBookingRequest(
+                                context = context,
+                                room = room,
+                                selectedDate = selectedDate,
+                                startTime = startTime,
+                                endTime = endTime,
+                                selectedCards = selectedCards
+                            )
+                            isSubmitting = false
+                            submitResultDialogState = BookingSubmitDialogState(
+                                success = result.success,
+                                message = result.message
+                            )
+                        }
+                    }
+                ) {
+                    Text("确认提交")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showSubmitConfirmDialog = false }) {
+                    Text("取消")
+                }
+            },
+            title = { Text("确认提交预约") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${room.name}")
+                    Text("时间：${selectedDate.format(dateFormatter)} ${startTime.format(timeFormatter)} - ${endTime.format(timeFormatter)}")
+                    Text("人数：$selectedCardCount 人")
+                }
             }
         )
     }
@@ -577,14 +658,33 @@ private fun BookingEntryScreen(
             }
 
             Button(
-                onClick = {},
-                enabled = timeValidationState.isBookable,
+                onClick = {
+                    val submitCheckMessage = validateBookingSubmissionLocally(
+                        context = context,
+                        room = room,
+                        selectedCards = selectedCards,
+                        timeValidationState = timeValidationState
+                    )
+                    if (submitCheckMessage != null) {
+                        submitResultDialogState = BookingSubmitDialogState(
+                            success = false,
+                            message = submitCheckMessage
+                        )
+                    } else {
+                        showSubmitConfirmDialog = true
+                    }
+                },
+                enabled = submitEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
                 Text(
-                    text = if (timeValidationState.isLoading) "校验中..." else "提交预约",
+                    text = when {
+                        isSubmitting -> "提交中..."
+                        timeValidationState.isLoading -> "校验中..."
+                        else -> "提交预约"
+                    },
                     fontSize = 16.sp
                 )
             }
@@ -631,6 +731,16 @@ private data class BookingTimeValidationState(
         )
     }
 }
+
+private data class BookingSubmitDialogState(
+    val success: Boolean,
+    val message: String
+)
+
+private data class BookingSubmitResult(
+    val success: Boolean,
+    val message: String
+)
 
 @Composable
 private fun BookingTimeValidationIndicator(
@@ -708,11 +818,13 @@ private data class BookingUseCard(
 private const val BOOKING_CARD_PREFS_NAME = "saved_cards"
 private const val BOOKING_KEY_CARDS_JSON = "cards_json"
 private const val BOOKING_TIME_VALIDATE_URL = "https://weixinlib.lut.edu.cn/getYY"
+private const val BOOKING_SUBMIT_URL = "https://weixinlib.lut.edu.cn/trainingroominfor/save?"
 private const val BOOKING_SOURCE_PAGE_URL = "https://weixinlib.lut.edu.cn/moretrainingroombesk"
 private val BOOKING_OPEN_TIME: LocalTime = LocalTime.of(8, 0)
 private val BOOKING_CLOSE_TIME: LocalTime = LocalTime.of(22, 0)
 private val BOOKING_MIN_END_TIME: LocalTime = LocalTime.of(9, 0)
 private val BOOKING_LATEST_START_TIME: LocalTime = LocalTime.of(21, 0)
+private const val BOOKING_FIXED_NOTE = "参赛/课题/项目研讨"
 private const val BOOKING_REQUEST_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
 
@@ -755,6 +867,10 @@ private fun BookingUseCard.displayTitle(): String {
     return note.ifBlank { name.ifBlank { studentId } }
 }
 
+private fun BookingUseCard.displayResolvedName(): String {
+    return name.trim()
+}
+
 private fun BookingUseCard.displaySummary(): String {
     val parts = mutableListOf(studentId)
     if (note.isNotBlank() && name.isNotBlank()) {
@@ -770,6 +886,28 @@ private fun BookingUseCard.displaySummary(): String {
 }
 
 private fun BookingUseCard.isSelectable(): Boolean = verificationStatus == "Verified"
+
+private fun validateBookingSubmissionLocally(
+    context: Context,
+    room: ConferenceRoom,
+    selectedCards: List<BookingUseCard>,
+    timeValidationState: BookingTimeValidationState
+): String? {
+    return when {
+        !AuthSessionManager.isLoggedIn(context) -> "请先登录后再提交预约"
+        !timeValidationState.isBookable -> "当前预约时间未通过校验，请先调整时间"
+        selectedCards.isEmpty() -> "请先选择参与预约的卡片"
+        selectedCards.size < room.minCapacity ->
+            "当前人数不足，至少需要 ${room.minCapacity} 人"
+        selectedCards.size > room.maxCapacity ->
+            "当前人数超限，最多允许 ${room.maxCapacity} 人"
+        selectedCards.any { it.studentId.isBlank() } ->
+            "卡包中存在缺少学号的成员，无法提交预约"
+        selectedCards.any { it.displayResolvedName().isBlank() } ->
+            "卡包中存在缺少姓名的成员，无法提交预约"
+        else -> null
+    }
+}
 
 private fun validateBookingTimeLocally(
     selectedDate: LocalDate,
@@ -875,6 +1013,160 @@ private fun isBookingLoginLikeResponse(body: String, finalUrl: String): Boolean 
         "读者登录" in body ||
         "统一身份认证" in body ||
         "action=\"login\"" in body
+}
+
+private suspend fun submitBookingRequest(
+    context: Context,
+    room: ConferenceRoom,
+    selectedDate: LocalDate,
+    startTime: LocalTime,
+    endTime: LocalTime,
+    selectedCards: List<BookingUseCard>
+): BookingSubmitResult {
+    val firstAttempt = submitBookingRequestOnce(
+        context = context,
+        room = room,
+        selectedDate = selectedDate,
+        startTime = startTime,
+        endTime = endTime,
+        selectedCards = selectedCards
+    )
+    if (firstAttempt.success || firstAttempt.message != "当前登录态已失效，请重新登录") {
+        return firstAttempt
+    }
+    if (!AuthSessionManager.isSsoLogin(context)) {
+        return firstAttempt
+    }
+
+    val renewResult = SsoLoginService.trySilentRefresh(context)
+    if (!renewResult.success) {
+        return BookingSubmitResult(
+            success = false,
+            message = renewResult.message ?: "当前登录态已失效，请重新登录"
+        )
+    }
+    return submitBookingRequestOnce(
+        context = context,
+        room = room,
+        selectedDate = selectedDate,
+        startTime = startTime,
+        endTime = endTime,
+        selectedCards = selectedCards
+    )
+}
+
+private suspend fun submitBookingRequestOnce(
+    context: Context,
+    room: ConferenceRoom,
+    selectedDate: LocalDate,
+    startTime: LocalTime,
+    endTime: LocalTime,
+    selectedCards: List<BookingUseCard>
+): BookingSubmitResult {
+    return withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        val rawCookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        val applicantCardId = selectedCards.firstOrNull()?.studentId?.trim().orEmpty()
+        if (applicantCardId.isBlank()) {
+            return@withContext BookingSubmitResult(false, "当前没有可用的主预约人卡片")
+        }
+
+        val payload = JSONObject().apply {
+            put("filelist", JSONArray())
+            put("cardid", applicantCardId)
+            put("roomid", room.id)
+            put("beginday", selectedDate.format(dateFormatter))
+            put("begintime", startTime.format(timeFormatter))
+            put("endday", selectedDate.format(dateFormatter))
+            put("endtime", endTime.format(timeFormatter))
+            put("besknote", BOOKING_FIXED_NOTE)
+            put("email", "")
+            put("userpho", "")
+            put("usemovepho", "")
+            put("users", JSONArray().apply {
+                selectedCards.forEach { card ->
+                    put(
+                        JSONObject().apply {
+                            put("usercode", card.studentId.trim())
+                            put("username", card.displayResolvedName())
+                            put("userunit", card.userUnit.trim())
+                            put("usertype", card.userType.trim())
+                        }
+                    )
+                }
+            })
+            put("directorPhone", "")
+            put("directorList", JSONArray())
+        }
+
+        runCatching {
+            val connection = (URL(BOOKING_SUBMIT_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                requestMethod = "POST"
+                doOutput = true
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "application/json, text/javascript, */*; q=0.01")
+                setRequestProperty("Content-Type", "application/json;charset=UTF-8")
+                setRequestProperty("Origin", "https://weixinlib.lut.edu.cn")
+                setRequestProperty("Referer", "$BOOKING_SOURCE_PAGE_URL?id=${room.id}")
+                setRequestProperty("User-Agent", BOOKING_REQUEST_USER_AGENT)
+                setRequestProperty("X-Requested-With", "XMLHttpRequest")
+                rawCookieHeader?.let { setRequestProperty("Cookie", it) }
+            }
+            connection.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write(payload.toString())
+            }
+
+            val body = (if (connection.responseCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            })
+                ?.bufferedReader()
+                ?.use { it.readText() }
+                .orEmpty()
+            val finalUrl = connection.url.toString()
+
+            if (isBookingLoginLikeResponse(body, finalUrl)) {
+                return@runCatching BookingSubmitResult(
+                    success = false,
+                    message = "当前登录态已失效，请重新登录"
+                )
+            }
+
+            val normalizedBody = body.trim()
+            val resultMessage = runCatching {
+                JSONObject(normalizedBody).optString("state").trim()
+            }.getOrNull().orEmpty()
+
+            when {
+                resultMessage.contains("成功") -> BookingSubmitResult(
+                    success = true,
+                    message = resultMessage
+                )
+                resultMessage.isNotBlank() -> BookingSubmitResult(
+                    success = false,
+                    message = resultMessage
+                )
+                connection.responseCode in 200..299 -> BookingSubmitResult(
+                    success = true,
+                    message = "预约请求已提交，可在“我的预约”中查看"
+                )
+                else -> BookingSubmitResult(
+                    success = false,
+                    message = "提交失败，服务器未返回明确结果"
+                )
+            }
+        }.getOrElse { error ->
+            BookingSubmitResult(
+                success = false,
+                message = error.message ?: "提交数据发生未知错误"
+            )
+        }
+    }
 }
 
 @Composable
