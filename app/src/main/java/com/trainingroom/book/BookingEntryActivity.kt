@@ -26,7 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,23 +51,33 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trainingroom.book.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class BookingEntryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +129,9 @@ private fun BookingEntryScreen(
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var startTime by remember { mutableStateOf(LocalTime.of(14, 0)) }
     var endTime by remember { mutableStateOf(LocalTime.of(16, 0)) }
+    var timeValidationState by remember {
+        mutableStateOf(BookingTimeValidationState.idle("请选择预约日期和时间"))
+    }
     var showDatePickerDialog by remember { mutableStateOf(false) }
     var showStartTimePickerDialog by remember { mutableStateOf(false) }
     var showEndTimePickerDialog by remember { mutableStateOf(false) }
@@ -162,11 +177,29 @@ private fun BookingEntryScreen(
     }
     val cardPickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    androidx.compose.runtime.LaunchedEffect(lockedSelectedCardIds, selectableCardIds) {
+    LaunchedEffect(lockedSelectedCardIds, selectableCardIds) {
         val normalizedSelected = (selectedCardIds intersect selectableCardIds) + lockedSelectedCardIds
         if (normalizedSelected != selectedCardIds) {
             selectedCardIds = normalizedSelected
         }
+    }
+
+    LaunchedEffect(room.id, selectedDate, startTime, endTime) {
+        val localValidationResult = validateBookingTimeLocally(selectedDate, startTime, endTime)
+        if (localValidationResult != null) {
+            timeValidationState = localValidationResult
+            return@LaunchedEffect
+        }
+
+        timeValidationState = BookingTimeValidationState.loading("正在检查该时间段是否可预约...")
+        delay(250)
+        timeValidationState = validateBookingTimeRemotely(
+            context = context,
+            roomId = room.id,
+            selectedDate = selectedDate,
+            startTime = startTime,
+            endTime = endTime
+        )
     }
 
     if (showCardPickerSheet) {
@@ -411,6 +444,12 @@ private fun BookingEntryScreen(
                             }
                         )
                     }
+                    BookingTimeValidationIndicator(
+                        state = timeValidationState,
+                        dateText = selectedDate.format(dateFormatter),
+                        startTimeText = startTime.format(timeFormatter),
+                        endTimeText = endTime.format(timeFormatter)
+                    )
                 }
             }
 
@@ -539,11 +578,117 @@ private fun BookingEntryScreen(
 
             Button(
                 onClick = {},
+                enabled = timeValidationState.isBookable,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
-                Text("提交预约", fontSize = 16.sp)
+                Text(
+                    text = if (timeValidationState.isLoading) "校验中..." else "提交预约",
+                    fontSize = 16.sp
+                )
+            }
+        }
+    }
+}
+
+private enum class BookingTimeValidationTone {
+    Info,
+    Success,
+    Warning
+}
+
+private data class BookingTimeValidationState(
+    val tone: BookingTimeValidationTone,
+    val message: String,
+    val detail: String? = null,
+    val isLoading: Boolean = false,
+    val isBookable: Boolean = false
+) {
+    companion object {
+        fun idle(message: String) = BookingTimeValidationState(
+            tone = BookingTimeValidationTone.Info,
+            message = message
+        )
+
+        fun loading(message: String) = BookingTimeValidationState(
+            tone = BookingTimeValidationTone.Info,
+            message = message,
+            isLoading = true
+        )
+
+        fun success(message: String, detail: String? = null) = BookingTimeValidationState(
+            tone = BookingTimeValidationTone.Success,
+            message = message,
+            detail = detail,
+            isBookable = true
+        )
+
+        fun warning(message: String, detail: String? = null) = BookingTimeValidationState(
+            tone = BookingTimeValidationTone.Warning,
+            message = message,
+            detail = detail
+        )
+    }
+}
+
+@Composable
+private fun BookingTimeValidationIndicator(
+    state: BookingTimeValidationState,
+    dateText: String,
+    startTimeText: String,
+    endTimeText: String
+) {
+    val (containerColor, contentColor, icon) = when (state.tone) {
+        BookingTimeValidationTone.Info -> Triple(
+            MaterialTheme.colorScheme.surfaceContainerHigh,
+            MaterialTheme.colorScheme.onSurfaceVariant,
+            Icons.Filled.Info
+        )
+        BookingTimeValidationTone.Success -> Triple(
+            Color(0xFFE8F5E9),
+            Color(0xFF1B5E20),
+            Icons.Filled.CheckCircle
+        )
+        BookingTimeValidationTone.Warning -> Triple(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+            Icons.Filled.ErrorOutline
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor
+                )
+                Text(
+                    text = state.message,
+                    color = contentColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            state.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+                Text(
+                    text = detail,
+                    color = contentColor.copy(alpha = 0.82f),
+                    fontSize = 12.sp
+                )
             }
         }
     }
@@ -562,6 +707,14 @@ private data class BookingUseCard(
 
 private const val BOOKING_CARD_PREFS_NAME = "saved_cards"
 private const val BOOKING_KEY_CARDS_JSON = "cards_json"
+private const val BOOKING_TIME_VALIDATE_URL = "https://weixinlib.lut.edu.cn/getYY"
+private const val BOOKING_SOURCE_PAGE_URL = "https://weixinlib.lut.edu.cn/moretrainingroombesk"
+private val BOOKING_OPEN_TIME: LocalTime = LocalTime.of(8, 0)
+private val BOOKING_CLOSE_TIME: LocalTime = LocalTime.of(22, 0)
+private val BOOKING_MIN_END_TIME: LocalTime = LocalTime.of(9, 0)
+private val BOOKING_LATEST_START_TIME: LocalTime = LocalTime.of(21, 0)
+private const val BOOKING_REQUEST_USER_AGENT =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
 
 private fun loadBookingSavedCards(context: Context): List<BookingUseCard> {
     val raw = context.getSharedPreferences(BOOKING_CARD_PREFS_NAME, Context.MODE_PRIVATE)
@@ -617,6 +770,112 @@ private fun BookingUseCard.displaySummary(): String {
 }
 
 private fun BookingUseCard.isSelectable(): Boolean = verificationStatus == "Verified"
+
+private fun validateBookingTimeLocally(
+    selectedDate: LocalDate,
+    startTime: LocalTime,
+    endTime: LocalTime
+): BookingTimeValidationState? {
+    val startAt = LocalDateTime.of(selectedDate, startTime)
+    val endAt = LocalDateTime.of(selectedDate, endTime)
+    val now = LocalDateTime.now()
+
+    return when {
+        startTime.isBefore(BOOKING_OPEN_TIME) || endTime.isAfter(BOOKING_CLOSE_TIME) ->
+            BookingTimeValidationState.warning("预约时间需在图书馆开放时间 08:00 - 22:00 内")
+        !startTime.isBefore(BOOKING_LATEST_START_TIME) ->
+            BookingTimeValidationState.warning("开始时间必须早于 21:00")
+        endTime.isBefore(BOOKING_MIN_END_TIME) ->
+            BookingTimeValidationState.warning("结束时间必须不早于 09:00")
+        !endAt.isAfter(startAt) -> BookingTimeValidationState.warning("结束时间需晚于开始时间")
+        !startAt.isAfter(now) -> BookingTimeValidationState.warning("开始日期及时间应大于现在的时间")
+        else -> null
+    }
+}
+
+private suspend fun validateBookingTimeRemotely(
+    context: Context,
+    roomId: String,
+    selectedDate: LocalDate,
+    startTime: LocalTime,
+    endTime: LocalTime
+): BookingTimeValidationState {
+    return withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        val rawCookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+
+        val query = buildString {
+            append("roomId=")
+            append(URLEncoder.encode(roomId, "UTF-8"))
+            append("&beginDay=")
+            append(URLEncoder.encode(selectedDate.format(dateFormatter), "UTF-8"))
+            append("&beginTime=")
+            append(URLEncoder.encode(startTime.format(timeFormatter), "UTF-8"))
+            append("&endDay=")
+            append(URLEncoder.encode(selectedDate.format(dateFormatter), "UTF-8"))
+            append("&endTime=")
+            append(URLEncoder.encode(endTime.format(timeFormatter), "UTF-8"))
+        }
+
+        runCatching {
+            val connection = (URL("$BOOKING_TIME_VALIDATE_URL?$query").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "application/json, text/javascript, */*; q=0.01")
+                setRequestProperty("Content-Type", "application/json;charset=UTF-8")
+                setRequestProperty("Referer", "$BOOKING_SOURCE_PAGE_URL?id=$roomId")
+                setRequestProperty("User-Agent", BOOKING_REQUEST_USER_AGENT)
+                setRequestProperty("X-Requested-With", "XMLHttpRequest")
+                rawCookieHeader?.let { setRequestProperty("Cookie", it) }
+            }
+
+            val responseText = (if (connection.responseCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            })
+                ?.bufferedReader()
+                ?.use { it.readText() }
+                .orEmpty()
+
+            if (isBookingLoginLikeResponse(responseText, connection.url.toString())) {
+                return@runCatching BookingTimeValidationState.warning("当前登录已失效，请重新登录后再校验预约时间")
+            }
+
+            val payload = JSONObject(responseText)
+            val isValid = payload.optString("flagSign").equals("true", ignoreCase = true)
+            val serverMessage = payload.optString("strReturn").trim().ifBlank { null }
+
+            if (isValid) {
+                BookingTimeValidationState.success(
+                    message = "当前时间段可预约",
+                    detail = "已通过预约时间合法性检查"
+                )
+            } else {
+                BookingTimeValidationState.warning(
+                    message = serverMessage ?: "当前时间段不可预约",
+                    detail = "请调整预约日期或时间后重试"
+                )
+            }
+        }.getOrElse { error ->
+            BookingTimeValidationState.warning(
+                message = "预约时间校验失败",
+                detail = error.message ?: "请稍后重试"
+            )
+        }
+    }
+}
+
+private fun isBookingLoginLikeResponse(body: String, finalUrl: String): Boolean {
+    return "cas/login" in finalUrl ||
+        "读者登录" in body ||
+        "统一身份认证" in body ||
+        "action=\"login\"" in body
+}
 
 @Composable
 private fun BookingCardPickerSheetContent(
