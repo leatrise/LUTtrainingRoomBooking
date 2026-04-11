@@ -422,27 +422,37 @@ private fun BookingEntryScreen(
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("使用卡片", fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "使用卡片",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = peopleRequirementMessage,
+                            fontSize = 12.sp,
+                            color = peopleRequirementColor
+                        )
+                    }
                     OutlinedButton(
                         onClick = {
                             availableCards = loadBookingSavedCards(context)
                             showCardPickerSheet = true
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
+                        ) {
                         Icon(
                             imageVector = Icons.Filled.CreditCard,
                             contentDescription = null
                         )
                         Text("选择卡片", modifier = Modifier.padding(start = 8.dp))
                     }
-                    Text(
-                        text = peopleRequirementMessage,
-                        fontSize = 12.sp,
-                        color = peopleRequirementColor
-                    )
 
                     if (selectedCards.isEmpty()) {
                         Box(
