@@ -1021,6 +1021,9 @@ fun HomeScreen() {
             userCenterRefreshKey += 1
         }
     }
+    LaunchedEffect(Unit) {
+        fetchUserCenterProfile(context)
+    }
     val topBarTitle = when (selectedNavItem) {
         0 -> "研讨室预约系统"
         1 -> "空闲研讨室搜索"
