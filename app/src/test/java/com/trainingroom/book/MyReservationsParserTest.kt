@@ -3,62 +3,91 @@ package com.trainingroom.book
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.time.LocalDateTime
 
 class MyReservationsParserTest {
 
     @Test
-    fun `parse reservation history page extracts rows and paging`() {
+    fun `parse training use log page extracts operation statuses`() {
         val html = """
             <html>
             <body>
-            <div id="tab2">
-              <form action="/moretraingroombesklog#tab2" id="frompost" name="frompost">
-                <input type="text" id="begintime" name="begintime" value="2025-11-06" />
-                <input type="text" id="endtime" name="endtime" value="2026-04-1" />
-                <table class="table_type_7 responsive_table full_width t_align_l">
-                  <tbody>
-                    <tr>
-                      <td data-title="状态">已审核</td>
-                      <td data-title="研讨间">研讨室A710</td>
-                      <td data-title="创建时间">2026-03-28 10:30</td>
-                      <td data-title="使用日期">2026-03-28</td>
-                      <td data-title="开始时间">14:50:08</td>
-                      <td data-title="结束日期">2026-03-28</td>
-                      <td data-title="结束时间">17:29:16</td>
-                    </tr>
-                    <tr>
-                      <td data-title="状态"><span>已审核</span></td>
-                      <td data-title="研讨间">研讨室A707</td>
-                      <td data-title="创建时间">2026-03-24 16:31</td>
-                      <td data-title="使用日期">2026-03-24</td>
-                      <td data-title="开始时间">19:30:40</td>
-                      <td data-title="结束日期">2026-03-24</td>
-                      <td data-title="结束时间">21:00:09</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <input type="hidden" id="currentPage" value="2" />
-                <input type="hidden" id="pageSize" value="10" />
-              </form>
+            <form action="/traininguselog" id="frompost" name="frompost">
+              <input type="text" id="begintime" name="begintime" value="2026-02-19" />
+              <input type="text" id="endtime" name="endtime" value="2026-05-30" />
+              <table class="table_type_7 responsive_table full_width t_align_l">
+                <thead>
+                  <tr>
+                    <th>研讨间</th>
+                    <th>创建时间</th>
+                    <th>使用日期</th>
+                    <th>开始时间</th>
+                    <th>结束时间</th>
+                    <th>操作类型</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-title="研讨间">研讨室A520</td>
+                    <td data-title="创建时间">2026-04-04 18:40</td>
+                    <td data-title="使用日期">2026-04-05</td>
+                    <td data-title="开始时间">14:18:37</td>
+                    <td data-title="结束时间">17:18:55</td>
+                    <td data-title="操作类型">取消或未知</td>
+                  </tr>
+                  <tr>
+                    <td data-title="研讨间">研讨室A710</td>
+                    <td data-title="创建时间">2026-03-28 14:50</td>
+                    <td data-title="使用日期">2026-03-28</td>
+                    <td data-title="开始时间">14:50:08</td>
+                    <td data-title="结束时间">17:29:15</td>
+                    <td data-title="操作类型">借出</td>
+                  </tr>
+                </tbody>
+              </table>
+              <input type="hidden" id="currentPage" value="2" />
+              <input type="hidden" id="pageSize" value="10" />
               <div class="pagination">
-                <span>共有：13条记录</span>
+                <span>共有：22条记录</span>
               </div>
-            </div>
+            </form>
             </body>
             </html>
         """.trimIndent()
 
-        val page = parseMyTrainingReservationsPage(html)
+        val page = parseMyTrainingUseLogPage(html)
 
         assertNotNull(page)
-        assertEquals("2025-11-06", page?.beginDate)
-        assertEquals("2026-04-1", page?.endDate)
+        assertEquals("2026-02-19", page?.beginDate)
+        assertEquals("2026-05-30", page?.endDate)
         assertEquals(1, page?.pageNo)
         assertEquals(10, page?.pageSize)
-        assertEquals(13, page?.totalCount)
+        assertEquals(22, page?.totalCount)
         assertEquals(2, page?.items?.size)
-        assertEquals("研讨室A710", page?.items?.first()?.roomName)
-        assertEquals("已审核", page?.items?.get(1)?.status)
+        assertEquals("已取消", page?.items?.first()?.status)
+        assertEquals("借出", page?.items?.get(1)?.status)
+        assertEquals("2026-03-28", page?.items?.get(1)?.endDate)
+        assertEquals("17:29:15", page?.items?.get(1)?.endTime)
+    }
+
+    @Test
+    fun `display borrowed reservation as ended after end time`() {
+        val item = MyTrainingReservationItem(
+            status = "借出",
+            roomName = "研讨室A710",
+            createdAt = "2026-03-28 14:50",
+            useDate = "2026-03-28",
+            startTime = "14:50:08",
+            endDate = "2026-03-28",
+            endTime = "17:29:15"
+        )
+
+        val status = displayMyTrainingReservationStatus(
+            item = item,
+            now = LocalDateTime.of(2026, 3, 28, 17, 30)
+        )
+
+        assertEquals("已结束", status)
     }
 
     @Test

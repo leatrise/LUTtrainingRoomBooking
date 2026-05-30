@@ -39,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,10 +54,12 @@ import java.net.URL
 import java.net.URLEncoder
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-private const val MY_TRAINING_HISTORY_URL = "https://weixinlib.lut.edu.cn/moretraingroombesklog"
+private const val MY_TRAINING_USE_LOG_URL = "https://weixinlib.lut.edu.cn/traininguselog"
 private const val MY_TRAINING_CURRENT_URL = "https://weixinlib.lut.edu.cn/trainingroombeskinfor"
 private const val MY_TRAINING_DELETE_MORE_URL = "https://weixinlib.lut.edu.cn/trainingroombeskinfor/deletemore"
 private const val WEIXINLIB_WEB_USER_AGENT =
@@ -101,6 +104,11 @@ data class MyTrainingCurrentReservationFetchResult(
 data class MyTrainingReservationCancelResult(
     val success: Boolean,
     val message: String
+)
+
+private data class MyTrainingHttpResponse(
+    val body: String,
+    val finalUrl: String
 )
 
 enum class ReservationDatePreset(val label: String, val monthCount: Long?) {
@@ -206,37 +214,50 @@ private suspend fun fetchMyTrainingReservationsOnce(
         runCatching {
             val cookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
             val pagerOffset = pageNo.coerceAtLeast(0) * pageSize.coerceAtLeast(1)
-            val url = URL(
-                "$MY_TRAINING_HISTORY_URL?pageSize=$pageSize&pageNumber=1&begintime=$beginDate&endtime=$endDate&pager.offset=$pagerOffset"
+            val query = "pageSize=$pageSize&pageNumber=1&begintime=$beginDate&endtime=$endDate&pager.offset=$pagerOffset"
+            val response = requestMyTrainingPage(
+                url = "$MY_TRAINING_USE_LOG_URL?$query",
+                referer = "https://weixinlib.lut.edu.cn/usercenter",
+                cookieHeader = cookieHeader
             )
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 10_000
-                readTimeout = 10_000
-                requestMethod = "GET"
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", WEIXINLIB_WEB_USER_AGENT)
-                setRequestProperty("Referer", "https://weixinlib.lut.edu.cn/usercenter")
-                cookieHeader?.let { setRequestProperty("Cookie", it) }
-            }
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val finalUrl = connection.url.toString()
-            val page = parseMyTrainingReservationsPage(
-                html = body,
+            val page = parseMyTrainingUseLogPage(
+                html = response.body,
                 requestedPageNo = pageNo,
                 requestedPageSize = pageSize
             )
             when {
                 page != null -> MyTrainingReservationFetchResult(page = page)
-                "cas/login" in finalUrl || "统一身份认证" in body -> {
+                "cas/login" in response.finalUrl || "统一身份认证" in response.body -> {
                     MyTrainingReservationFetchResult(message = "当前登录态已失效，请重新登录")
                 }
-                else -> MyTrainingReservationFetchResult(message = "已请求预约历史，但未解析到列表数据")
+                else -> MyTrainingReservationFetchResult(message = "已请求使用日志，但未解析到列表数据")
             }
         }.getOrElse { error ->
             Log.e("MyReservationsScreen", "获取我的预约失败: ${error.message}", error)
             MyTrainingReservationFetchResult(message = error.message ?: "获取我的预约失败")
         }
     }
+}
+
+private fun requestMyTrainingPage(
+    url: String,
+    referer: String,
+    cookieHeader: String?
+): MyTrainingHttpResponse {
+    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 10_000
+        readTimeout = 10_000
+        requestMethod = "GET"
+        instanceFollowRedirects = true
+        setRequestProperty("User-Agent", WEIXINLIB_WEB_USER_AGENT)
+        setRequestProperty("Referer", referer)
+        cookieHeader?.let { setRequestProperty("Cookie", it) }
+    }
+    val body = connection.inputStream.bufferedReader().use { it.readText() }
+    return MyTrainingHttpResponse(
+        body = body,
+        finalUrl = connection.url.toString()
+    )
 }
 
 suspend fun fetchMyCurrentTrainingReservations(
@@ -416,29 +437,27 @@ private fun readJavascriptArray(html: String, variableName: String): List<org.js
     }.getOrDefault(emptyList())
 }
 
-fun parseMyTrainingReservationsPage(
+fun parseMyTrainingUseLogPage(
     html: String,
     requestedPageNo: Int = 0,
     requestedPageSize: Int = 10
 ): MyTrainingReservationPage? {
-    val hasHistoryMarker =
-        html.contains("moretraingroombesklog") || html.contains("研讨间预约历史")
-    if (!hasHistoryMarker) return null
+    val hasUseLogMarker =
+        html.contains("traininguselog") || html.contains("操作类型")
+    if (!hasUseLogMarker) return null
 
-    val tabStart = html.indexOf("<div id=\"tab2\">")
-        .takeIf { it >= 0 }
-        ?: html.indexOf("id=\"tab2\"")
-    val searchRoot = if (tabStart >= 0) html.substring(tabStart) else html
-
-    val tableStart = searchRoot.indexOf("<table class=\"table_type_7")
-        .takeIf { it >= 0 }
-        ?: searchRoot.indexOf("table_type_7")
-    val tableScope = if (tableStart >= 0) searchRoot.substring(tableStart) else searchRoot
+    val useLogTable = Regex(
+        pattern = """<table[^>]*table_type_7[^>]*>.*?</table>""",
+        options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+    ).findAll(html)
+        .map { it.value }
+        .firstOrNull { it.contains("操作类型") }
+        ?: return null
 
     val tbodyContent = Regex(
         pattern = """<tbody[^>]*>(.*?)</tbody>""",
         options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
-    ).find(tableScope)?.groupValues?.getOrNull(1).orEmpty()
+    ).find(useLogTable)?.groupValues?.getOrNull(1).orEmpty()
 
     val rows = Regex(
         pattern = """<tr[^>]*>(.*?)</tr>""",
@@ -451,15 +470,15 @@ fun parseMyTrainingReservationsPage(
             ).findAll(match.groupValues[1])
                 .map { cell -> htmlToPlainText(cell.groupValues[1]) }
                 .toList()
-            if (cells.size < 7) return@mapNotNull null
+            if (cells.size < 6) return@mapNotNull null
             MyTrainingReservationItem(
-                status = cells[0],
-                roomName = cells[1],
-                createdAt = cells[2],
-                useDate = cells[3],
-                startTime = cells[4],
-                endDate = cells[5],
-                endTime = cells[6]
+                status = normalizeUseLogStatus(cells[5]),
+                roomName = cells[0],
+                createdAt = cells[1],
+                useDate = cells[2],
+                startTime = cells[3],
+                endDate = cells[2],
+                endTime = cells[4]
             )
         }
         .toList()
@@ -482,6 +501,39 @@ fun parseMyTrainingReservationsPage(
         pageSize = pageSize?.coerceAtLeast(1) ?: requestedPageSize,
         totalCount = totalCount ?: rows.size
     )
+}
+
+private fun normalizeUseLogStatus(raw: String): String {
+    return when (raw.trim()) {
+        "借出" -> "借出"
+        else -> "已取消"
+    }
+}
+
+fun displayMyTrainingReservationStatus(
+    item: MyTrainingReservationItem,
+    now: LocalDateTime = LocalDateTime.now()
+): String {
+    if (item.status != "借出") return item.status
+    val endDateTime = parseReservationEndDateTime(item) ?: return item.status
+    return if (!endDateTime.isAfter(now)) "已结束" else item.status
+}
+
+private fun parseReservationEndDateTime(item: MyTrainingReservationItem): LocalDateTime? {
+    val date = parseFlexibleDate(item.endDate) ?: parseFlexibleDate(item.useDate)
+        ?: return null
+    val time = parseFlexibleTime(item.endTime) ?: return null
+    return LocalDateTime.of(date, time)
+}
+
+private fun parseFlexibleTime(raw: String): LocalTime? {
+    if (raw.isBlank()) return null
+    val value = raw.trim()
+    return listOf("H:m:s", "H:m").firstNotNullOfOrNull { pattern ->
+        runCatching {
+            LocalTime.parse(value, DateTimeFormatter.ofPattern(pattern))
+        }.getOrNull()
+    }
 }
 
 private fun readInputValue(html: String, id: String): String? {
@@ -563,7 +615,7 @@ fun MyReservationsScreen(
                         "下一页没有解析出数据，已停止自动加载"
                     state.items.isNotEmpty() -> null
                     page.totalCount > 0 -> "已解析到总记录数，但未解析到当前页列表，页面结构可能变了"
-                    else -> "当前时间范围内暂无预约记录"
+                    else -> "当前时间范围内暂无使用记录"
                 }
             } ?: run {
                 if (!append) {
@@ -897,7 +949,7 @@ fun MyReservationsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "研讨间预约历史",
+                        text = "研讨间使用记录",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1019,7 +1071,7 @@ fun MyReservationsScreen(
                 if (!state.hasMore()) {
                     item {
                         Text(
-                            text = "已加载全部预约记录",
+                            text = "已加载全部使用记录",
                             modifier = Modifier.fillMaxWidth(),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1076,7 +1128,7 @@ fun MyReservationsScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = state.message ?: "暂无预约记录",
+                                text = state.message ?: "暂无使用记录",
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             if (showLoginButton) {
@@ -1100,8 +1152,18 @@ private fun ReservationHistoryCard(
     onCancel: (() -> Unit)? = null,
     isCancelling: Boolean = false
 ) {
+    val displayStatus = displayMyTrainingReservationStatus(item)
+    val isCancelled = displayStatus == "已取消"
+    val cardAlpha = if (isCancelled) 0.56f else 1f
+    val statusColor = if (isCancelled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(cardAlpha),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -1122,8 +1184,8 @@ private fun ReservationHistoryCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = item.status,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = displayStatus,
+                    color = statusColor,
                     fontWeight = FontWeight.Medium
                 )
             }
