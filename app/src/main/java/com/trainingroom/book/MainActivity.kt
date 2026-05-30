@@ -1254,6 +1254,16 @@ private fun PersonalCenterPlaceholderScreen(
     var profile by remember(refreshKey) { mutableStateOf<UserCenterProfile?>(null) }
     var message by remember(refreshKey) { mutableStateOf<String?>(null) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    val profileBannerContainerColor = if (profile == null && !isLoading) {
+        Color(0xFFEECFA7)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val profileBannerContentColor = if (profile == null && !isLoading) {
+        Color(0xFF2F1A00)
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
 
     LaunchedEffect(refreshKey) {
         isLoading = true
@@ -1273,7 +1283,7 @@ private fun PersonalCenterPlaceholderScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
+                containerColor = profileBannerContainerColor
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
@@ -1290,14 +1300,14 @@ private fun PersonalCenterPlaceholderScreen(
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.10f)),
+                            .background(profileBannerContentColor.copy(alpha = 0.10f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Person,
                             contentDescription = "用户头像占位",
                             modifier = Modifier.size(36.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = profileBannerContentColor
                         )
                     }
 
@@ -1313,7 +1323,7 @@ private fun PersonalCenterPlaceholderScreen(
                             },
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = profileBannerContentColor
                         )
                         Text(
                             text = when {
@@ -1326,7 +1336,7 @@ private fun PersonalCenterPlaceholderScreen(
                                 else -> message ?: "登录后可查看个人预约、常用房间、我的卡片和设置。"
                             },
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
+                            color = profileBannerContentColor.copy(alpha = 0.82f)
                         )
                     }
                 }
