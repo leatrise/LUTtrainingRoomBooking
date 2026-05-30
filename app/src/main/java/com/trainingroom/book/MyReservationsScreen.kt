@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
@@ -52,6 +53,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private const val MY_TRAINING_HISTORY_URL = "https://weixinlib.lut.edu.cn/moretraingroombesklog"
+private const val MY_TRAINING_CURRENT_URL = "https://weixinlib.lut.edu.cn/trainingroombeskinfor"
 private const val WEIXINLIB_WEB_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
 
@@ -76,6 +78,11 @@ data class MyTrainingReservationPage(
 
 data class MyTrainingReservationFetchResult(
     val page: MyTrainingReservationPage? = null,
+    val message: String? = null
+)
+
+data class MyTrainingCurrentReservationFetchResult(
+    val items: List<MyTrainingReservationItem> = emptyList(),
     val message: String? = null
 )
 
@@ -114,6 +121,9 @@ class MyTrainingReservationsState {
     var isAppending by mutableStateOf(false)
     var canLoadMore by mutableStateOf(true)
     var hasQueried by mutableStateOf(false)
+    var currentItems by mutableStateOf<List<MyTrainingReservationItem>>(emptyList())
+    var currentIsLoading by mutableStateOf(false)
+    var currentMessage by mutableStateOf<String?>(null)
     var selectedPreset by mutableStateOf(ReservationDatePreset.LAST_HALF_YEAR)
     var message by mutableStateOf<String?>(null)
 
@@ -209,6 +219,113 @@ private suspend fun fetchMyTrainingReservationsOnce(
             MyTrainingReservationFetchResult(message = error.message ?: "获取我的预约失败")
         }
     }
+}
+
+suspend fun fetchMyCurrentTrainingReservations(
+    context: Context
+): MyTrainingCurrentReservationFetchResult {
+    val firstAttempt = fetchMyCurrentTrainingReservationsOnce(context)
+    if (firstAttempt.message != "当前登录态已失效，请重新登录") {
+        return firstAttempt
+    }
+    if (!AuthSessionManager.isSsoLogin(context)) {
+        return firstAttempt
+    }
+
+    val renewResult = SsoLoginService.trySilentRefresh(context)
+    if (!renewResult.success) {
+        return MyTrainingCurrentReservationFetchResult(message = renewResult.message)
+    }
+    return fetchMyCurrentTrainingReservationsOnce(context)
+}
+
+private suspend fun fetchMyCurrentTrainingReservationsOnce(
+    context: Context
+): MyTrainingCurrentReservationFetchResult {
+    return withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        runCatching {
+            val cookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+            val connection = (URL(MY_TRAINING_CURRENT_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "GET"
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", WEIXINLIB_WEB_USER_AGENT)
+                setRequestProperty("Referer", "https://weixinlib.lut.edu.cn/usercenter")
+                cookieHeader?.let { setRequestProperty("Cookie", it) }
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val finalUrl = connection.url.toString()
+            val items = parseMyCurrentTrainingReservations(body)
+            when {
+                items.isNotEmpty() -> MyTrainingCurrentReservationFetchResult(items = items)
+                "cas/login" in finalUrl || "统一身份认证" in body -> {
+                    MyTrainingCurrentReservationFetchResult(message = "当前登录态已失效，请重新登录")
+                }
+                isMyCurrentTrainingReservationsPage(body) -> {
+                    MyTrainingCurrentReservationFetchResult(message = "当前暂无预约")
+                }
+                else -> MyTrainingCurrentReservationFetchResult(message = "已请求当前预约，但未解析到列表数据")
+            }
+        }.getOrElse { error ->
+            Log.e("MyReservationsScreen", "获取当前预约失败: ${error.message}", error)
+            MyTrainingCurrentReservationFetchResult(message = error.message ?: "获取当前预约失败")
+        }
+    }
+}
+
+fun parseMyCurrentTrainingReservations(html: String): List<MyTrainingReservationItem> {
+    if (!isMyCurrentTrainingReservationsPage(html)) return emptyList()
+
+    val oneRoomItems = readJavascriptArray(html, "oneroombesklist").map { item ->
+        MyTrainingReservationItem(
+            status = "单人预约",
+            roomName = item.optString("roomname"),
+            createdAt = item.optString("committime"),
+            useDate = item.optString("useday"),
+            startTime = item.optString("begintime"),
+            endDate = item.optString("useday"),
+            endTime = item.optString("endtime")
+        )
+    }
+
+    val multiRoomItems = readJavascriptArray(html, "moreroombesklist").map { item ->
+        MyTrainingReservationItem(
+            status = if (item.optInt("isCheck", 0) == 0) "待审核" else "已审核",
+            roomName = item.optString("roomname"),
+            createdAt = item.optString("committime").take(16),
+            useDate = item.optString("useday"),
+            startTime = item.optString("begintime"),
+            endDate = item.optString("useendday"),
+            endTime = item.optString("endtime")
+        )
+    }
+
+    return oneRoomItems + multiRoomItems
+}
+
+private fun isMyCurrentTrainingReservationsPage(html: String): Boolean {
+    return html.contains("trainingroombeskinfor") ||
+        html.contains("oneroombesklist") ||
+        html.contains("moreroombesklist") ||
+        html.contains("我的研讨间预约")
+}
+
+private fun readJavascriptArray(html: String, variableName: String): List<org.json.JSONObject> {
+    val rawArray = Regex(
+        pattern = """var\s+$variableName\s*=\s*(\[.*?]);""",
+        options = setOf(RegexOption.DOT_MATCHES_ALL)
+    ).find(html)?.groupValues?.getOrNull(1) ?: return emptyList()
+
+    return runCatching {
+        val array = JSONArray(rawArray)
+        buildList {
+            for (index in 0 until array.length()) {
+                array.optJSONObject(index)?.let(::add)
+            }
+        }
+    }.getOrDefault(emptyList())
 }
 
 fun parseMyTrainingReservationsPage(
@@ -394,7 +511,31 @@ fun MyReservationsScreen(
         if (!state.hasMore()) return
         requestPage(targetPageNo = state.pageNo + 1, append = true)
     }
+
+    fun requestCurrentReservations() {
+        if (state.currentIsLoading) return
+        scope.launch {
+            state.currentIsLoading = true
+            state.currentMessage = null
+            val result = fetchMyCurrentTrainingReservations(context)
+            state.currentItems = result.items
+            state.currentMessage = when {
+                result.items.isNotEmpty() -> null
+                result.message != null -> result.message
+                else -> "当前暂无预约"
+            }
+            state.currentIsLoading = false
+        }
+    }
+
+    LaunchedEffect(refreshKey) {
+        state.currentItems = emptyList()
+        state.currentMessage = null
+        requestCurrentReservations()
+    }
+
     val showLoginButton = state.message?.contains("登录") == true
+    val showCurrentLoginButton = state.currentMessage?.contains("登录") == true
     var presetExpanded by remember { mutableStateOf(false) }
     var showBeginDatePickerDialog by remember { mutableStateOf(false) }
     var showEndDatePickerDialog by remember { mutableStateOf(false) }
@@ -491,6 +632,98 @@ fun MyReservationsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "当前预约",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Button(
+                        onClick = ::requestCurrentReservations,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.currentIsLoading
+                    ) {
+                        Text("刷新当前预约")
+                    }
+                }
+            }
+        }
+
+        when {
+            state.currentIsLoading && state.currentItems.isEmpty() -> {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingIndicator()
+                        }
+                    }
+                }
+            }
+            state.currentItems.isNotEmpty() -> {
+                itemsIndexed(state.currentItems) { _, item ->
+                    ReservationHistoryCard(item)
+                }
+                state.currentMessage?.let { message ->
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Text(
+                                text = message,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+            else -> {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = state.currentMessage ?: "当前暂无预约",
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            if (showCurrentLoginButton) {
+                                Button(
+                                    onClick = { onOpenLogin(LoginActivity.TAB_LIBRARY) }
+                                ) {
+                                    Text("重新登录")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
