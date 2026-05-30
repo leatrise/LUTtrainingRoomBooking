@@ -77,6 +77,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -96,8 +97,21 @@ class BookingEntryActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val fallbackClock = LocalDateTime.now()
+                    val initialDate = intent.getStringExtra(EXTRA_SELECTED_DATE)
+                        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                        ?: fallbackClock.toLocalDate()
+                    val initialStartTime = intent.getStringExtra(EXTRA_START_TIME)
+                        ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                        ?: nextBookingQuarterHour(fallbackClock.toLocalTime())
+                    val initialEndTime = intent.getStringExtra(EXTRA_END_TIME)
+                        ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                        ?: nearestBookingHalfHour(fallbackClock.toLocalTime().plusHours(2))
                     BookingEntryScreen(
                         room = room,
+                        initialDate = initialDate,
+                        initialStartTime = initialStartTime,
+                        initialEndTime = initialEndTime,
                         onBack = { finish() }
                     )
                 }
@@ -107,10 +121,22 @@ class BookingEntryActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_ROOM = "booking_room"
+        private const val EXTRA_SELECTED_DATE = "booking_selected_date"
+        private const val EXTRA_START_TIME = "booking_start_time"
+        private const val EXTRA_END_TIME = "booking_end_time"
 
-        fun createIntent(context: Context, room: ConferenceRoom): Intent =
+        fun createIntent(
+            context: Context,
+            room: ConferenceRoom,
+            selectedDate: LocalDate? = null,
+            startTime: LocalTime? = null,
+            endTime: LocalTime? = null
+        ): Intent =
             Intent(context, BookingEntryActivity::class.java).apply {
                 putExtra(EXTRA_ROOM, room)
+                selectedDate?.let { putExtra(EXTRA_SELECTED_DATE, it.toString()) }
+                startTime?.let { putExtra(EXTRA_START_TIME, it.toString()) }
+                endTime?.let { putExtra(EXTRA_END_TIME, it.toString()) }
             }
     }
 }
@@ -119,6 +145,9 @@ class BookingEntryActivity : ComponentActivity() {
 @Composable
 private fun BookingEntryScreen(
     room: ConferenceRoom,
+    initialDate: LocalDate = LocalDate.now(),
+    initialStartTime: LocalTime = nextBookingQuarterHour(LocalTime.now()),
+    initialEndTime: LocalTime = nearestBookingHalfHour(LocalTime.now().plusHours(2)),
     onBack: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -129,9 +158,9 @@ private fun BookingEntryScreen(
         ?.ifBlank { null }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-    var startTime by remember { mutableStateOf(LocalTime.of(14, 0)) }
-    var endTime by remember { mutableStateOf(LocalTime.of(16, 0)) }
+    var selectedDate by remember { mutableStateOf(initialDate) }
+    var startTime by remember { mutableStateOf(initialStartTime) }
+    var endTime by remember { mutableStateOf(initialEndTime) }
     var timeValidationState by remember {
         mutableStateOf(BookingTimeValidationState.idle("请选择预约日期和时间"))
     }
@@ -1167,6 +1196,23 @@ private suspend fun submitBookingRequestOnce(
             )
         }
     }
+}
+
+private fun nearestBookingHalfHour(time: LocalTime): LocalTime {
+    val truncated = time.truncatedTo(ChronoUnit.MINUTES)
+    val remainder = truncated.minute % 30
+    return if (remainder < 15) {
+        truncated.minusMinutes(remainder.toLong())
+    } else {
+        truncated.plusMinutes((30 - remainder).toLong())
+    }
+}
+
+private fun nextBookingQuarterHour(time: LocalTime): LocalTime {
+    val truncated = time.truncatedTo(ChronoUnit.MINUTES)
+    val remainder = truncated.minute % 15
+    if (remainder == 0) return truncated
+    return truncated.plusMinutes((15 - remainder).toLong())
 }
 
 @Composable

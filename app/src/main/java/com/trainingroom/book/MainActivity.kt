@@ -1153,8 +1153,16 @@ fun HomeScreen() {
                         rooms = conferenceRooms,
                         state = searchState,
                         onRoomSelected = openRoomDetail,
-                        onReserveRoomSelected = { room ->
-                            context.startActivity(BookingEntryActivity.createIntent(context, room))
+                        onReserveRoomSelected = { room, selectedDate, startTime, endTime ->
+                            context.startActivity(
+                                BookingEntryActivity.createIntent(
+                                    context = context,
+                                    room = room,
+                                    selectedDate = selectedDate,
+                                    startTime = startTime,
+                                    endTime = endTime
+                                )
+                            )
                         }
                     )
                 }
@@ -1545,7 +1553,7 @@ fun SearchAvailabilityScreen(
     rooms: List<ConferenceRoom>,
     state: SearchAvailabilityState,
     onRoomSelected: (ConferenceRoom) -> Unit,
-    onReserveRoomSelected: (ConferenceRoom) -> Unit
+    onReserveRoomSelected: (ConferenceRoom, LocalDate, LocalTime, LocalTime) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2223,7 +2231,9 @@ fun SearchAvailabilityScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         OutlinedButton(
-                                            onClick = { onReserveRoomSelected(room) },
+                                            onClick = {
+                                                onReserveRoomSelected(room, selectedDate, startTime, endTime)
+                                            },
                                             modifier = Modifier.heightIn(min = 32.dp),
                                             contentPadding = PaddingValues(horizontal = 13.dp, vertical = 4.dp)
                                         ) {
@@ -2819,7 +2829,7 @@ fun SearchAvailabilityScreenPreview() {
                 rooms = previewRooms,
                 state = previewState,
                 onRoomSelected = {},
-                onReserveRoomSelected = {}
+                onReserveRoomSelected = { _, _, _, _ -> }
             )
         }
     }
