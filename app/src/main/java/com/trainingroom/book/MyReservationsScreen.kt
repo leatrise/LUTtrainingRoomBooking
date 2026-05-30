@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,8 +47,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -54,8 +58,14 @@ import java.time.format.DateTimeFormatter
 
 private const val MY_TRAINING_HISTORY_URL = "https://weixinlib.lut.edu.cn/moretraingroombesklog"
 private const val MY_TRAINING_CURRENT_URL = "https://weixinlib.lut.edu.cn/trainingroombeskinfor"
+private const val MY_TRAINING_DELETE_MORE_URL = "https://weixinlib.lut.edu.cn/trainingroombeskinfor/deletemore"
 private const val WEIXINLIB_WEB_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0"
+
+enum class MyTrainingReservationCancelType {
+    NONE,
+    MULTI
+}
 
 data class MyTrainingReservationItem(
     val status: String,
@@ -64,7 +74,9 @@ data class MyTrainingReservationItem(
     val useDate: String,
     val startTime: String,
     val endDate: String,
-    val endTime: String
+    val endTime: String,
+    val id: String = "",
+    val cancelType: MyTrainingReservationCancelType = MyTrainingReservationCancelType.NONE
 )
 
 data class MyTrainingReservationPage(
@@ -84,6 +96,11 @@ data class MyTrainingReservationFetchResult(
 data class MyTrainingCurrentReservationFetchResult(
     val items: List<MyTrainingReservationItem> = emptyList(),
     val message: String? = null
+)
+
+data class MyTrainingReservationCancelResult(
+    val success: Boolean,
+    val message: String
 )
 
 enum class ReservationDatePreset(val label: String, val monthCount: Long?) {
@@ -123,6 +140,7 @@ class MyTrainingReservationsState {
     var hasQueried by mutableStateOf(false)
     var currentItems by mutableStateOf<List<MyTrainingReservationItem>>(emptyList())
     var currentIsLoading by mutableStateOf(false)
+    var cancellingReservationId by mutableStateOf<String?>(null)
     var currentMessage by mutableStateOf<String?>(null)
     var selectedPreset by mutableStateOf(ReservationDatePreset.LAST_HALF_YEAR)
     var message by mutableStateOf<String?>(null)
@@ -278,19 +296,7 @@ private suspend fun fetchMyCurrentTrainingReservationsOnce(
 fun parseMyCurrentTrainingReservations(html: String): List<MyTrainingReservationItem> {
     if (!isMyCurrentTrainingReservationsPage(html)) return emptyList()
 
-    val oneRoomItems = readJavascriptArray(html, "oneroombesklist").map { item ->
-        MyTrainingReservationItem(
-            status = "单人预约",
-            roomName = item.optString("roomname"),
-            createdAt = item.optString("committime"),
-            useDate = item.optString("useday"),
-            startTime = item.optString("begintime"),
-            endDate = item.optString("useday"),
-            endTime = item.optString("endtime")
-        )
-    }
-
-    val multiRoomItems = readJavascriptArray(html, "moreroombesklist").map { item ->
+    return readJavascriptArray(html, "moreroombesklist").map { item ->
         MyTrainingReservationItem(
             status = if (item.optInt("isCheck", 0) == 0) "待审核" else "已审核",
             roomName = item.optString("roomname"),
@@ -298,16 +304,98 @@ fun parseMyCurrentTrainingReservations(html: String): List<MyTrainingReservation
             useDate = item.optString("useday"),
             startTime = item.optString("begintime"),
             endDate = item.optString("useendday"),
-            endTime = item.optString("endtime")
+            endTime = item.optString("endtime"),
+            id = item.optString("id"),
+            cancelType = MyTrainingReservationCancelType.MULTI
         )
     }
+}
 
-    return oneRoomItems + multiRoomItems
+suspend fun cancelMyTrainingReservation(
+    context: Context,
+    item: MyTrainingReservationItem
+): MyTrainingReservationCancelResult {
+    val firstAttempt = cancelMyTrainingReservationOnce(context, item)
+    if (firstAttempt.success || firstAttempt.message != "当前登录态已失效，请重新登录") {
+        return firstAttempt
+    }
+    if (!AuthSessionManager.isSsoLogin(context)) {
+        return firstAttempt
+    }
+
+    val renewResult = SsoLoginService.trySilentRefresh(context)
+    if (!renewResult.success) {
+        return MyTrainingReservationCancelResult(
+            success = false,
+            message = renewResult.message ?: "当前登录态已失效，请重新登录"
+        )
+    }
+    return cancelMyTrainingReservationOnce(context, item)
+}
+
+private suspend fun cancelMyTrainingReservationOnce(
+    context: Context,
+    item: MyTrainingReservationItem
+): MyTrainingReservationCancelResult {
+    if (item.id.isBlank() || item.cancelType == MyTrainingReservationCancelType.NONE) {
+        return MyTrainingReservationCancelResult(false, "当前预约缺少取消参数")
+    }
+
+    return withContext(Dispatchers.IO) {
+        AuthSessionManager.install(context)
+        runCatching {
+            val (url, parameterName) = when (item.cancelType) {
+                MyTrainingReservationCancelType.MULTI -> MY_TRAINING_DELETE_MORE_URL to "deleteid"
+                MyTrainingReservationCancelType.NONE -> return@runCatching MyTrainingReservationCancelResult(
+                    false,
+                    "当前预约不可取消"
+                )
+            }
+            val requestBody = "$parameterName=${URLEncoder.encode(item.id, "UTF-8")}"
+            val cookieHeader = AuthSessionManager.weixinlibCookieHeader(context)
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                requestMethod = "POST"
+                doOutput = true
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", WEIXINLIB_WEB_USER_AGENT)
+                setRequestProperty("Referer", MY_TRAINING_CURRENT_URL)
+                setRequestProperty("Origin", "https://weixinlib.lut.edu.cn")
+                setRequestProperty("X-Requested-With", "XMLHttpRequest")
+                setRequestProperty("Accept", "application/json, text/javascript, */*; q=0.01")
+                setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                cookieHeader?.let { setRequestProperty("Cookie", it) }
+            }
+            connection.outputStream.use { output ->
+                output.write(requestBody.toByteArray(Charsets.UTF_8))
+            }
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val finalUrl = connection.url.toString()
+
+            when {
+                "cas/login" in finalUrl || "统一身份认证" in body -> {
+                    MyTrainingReservationCancelResult(false, "当前登录态已失效，请重新登录")
+                }
+                else -> {
+                    val json = runCatching { JSONObject(body) }.getOrNull()
+                    val success = json?.optInt("value") == 1
+                    MyTrainingReservationCancelResult(
+                        success = success,
+                        message = json?.optString("msg")?.takeIf { it.isNotBlank() }
+                            ?: if (success) "取消成功" else "取消失败"
+                    )
+                }
+            }
+        }.getOrElse { error ->
+            Log.e("MyReservationsScreen", "取消当前预约失败: ${error.message}", error)
+            MyTrainingReservationCancelResult(false, error.message ?: "取消当前预约失败")
+        }
+    }
 }
 
 private fun isMyCurrentTrainingReservationsPage(html: String): Boolean {
     return html.contains("trainingroombeskinfor") ||
-        html.contains("oneroombesklist") ||
         html.contains("moreroombesklist") ||
         html.contains("我的研讨间预约")
 }
@@ -539,6 +627,24 @@ fun MyReservationsScreen(
     var presetExpanded by remember { mutableStateOf(false) }
     var showBeginDatePickerDialog by remember { mutableStateOf(false) }
     var showEndDatePickerDialog by remember { mutableStateOf(false) }
+    var pendingCancelItem by remember { mutableStateOf<MyTrainingReservationItem?>(null) }
+    var cancelResultDialog by remember { mutableStateOf<MyTrainingReservationCancelResult?>(null) }
+
+    fun cancelCurrentReservation(item: MyTrainingReservationItem) {
+        if (state.cancellingReservationId != null) return
+        scope.launch {
+            state.cancellingReservationId = item.id
+            state.currentMessage = null
+            val result = cancelMyTrainingReservation(context, item)
+            if (result.success) {
+                state.currentItems = state.currentItems.filterNot {
+                    it.id == item.id && it.cancelType == item.cancelType
+                }
+            }
+            cancelResultDialog = result
+            state.cancellingReservationId = null
+        }
+    }
 
     fun applyPreset(preset: ReservationDatePreset) {
         state.selectedPreset = preset
@@ -626,6 +732,50 @@ fun MyReservationsScreen(
         }
     }
 
+    pendingCancelItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = {
+                if (state.cancellingReservationId == null) {
+                    pendingCancelItem = null
+                }
+            },
+            title = { Text("取消当前预约") },
+            text = { Text("确认取消 ${item.roomName} 的当前预约？") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingCancelItem = null
+                        cancelCurrentReservation(item)
+                    },
+                    enabled = state.cancellingReservationId == null
+                ) {
+                    Text("确认取消")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingCancelItem = null },
+                    enabled = state.cancellingReservationId == null
+                ) {
+                    Text("再想想")
+                }
+            }
+        )
+    }
+
+    cancelResultDialog?.let { result ->
+        AlertDialog(
+            onDismissRequest = { cancelResultDialog = null },
+            title = { Text(if (result.success) "取消成功" else "取消失败") },
+            text = { Text(result.message) },
+            confirmButton = {
+                Button(onClick = { cancelResultDialog = null }) {
+                    Text("确定")
+                }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -676,7 +826,18 @@ fun MyReservationsScreen(
             }
             state.currentItems.isNotEmpty() -> {
                 itemsIndexed(state.currentItems) { _, item ->
-                    ReservationHistoryCard(item)
+                    ReservationHistoryCard(
+                        item = item,
+                        onCancel = if (
+                            item.id.isNotBlank() &&
+                            item.cancelType != MyTrainingReservationCancelType.NONE
+                        ) {
+                            { pendingCancelItem = item }
+                        } else {
+                            null
+                        },
+                        isCancelling = state.cancellingReservationId == item.id
+                    )
                 }
                 state.currentMessage?.let { message ->
                     item {
@@ -934,7 +1095,11 @@ fun MyReservationsScreen(
 }
 
 @Composable
-private fun ReservationHistoryCard(item: MyTrainingReservationItem) {
+private fun ReservationHistoryCard(
+    item: MyTrainingReservationItem,
+    onCancel: (() -> Unit)? = null,
+    isCancelling: Boolean = false
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -965,6 +1130,15 @@ private fun ReservationHistoryCard(item: MyTrainingReservationItem) {
             ReservationHistoryField("创建时间", item.createdAt)
             ReservationHistoryField("使用时间", "${item.useDate} ${item.startTime}")
             ReservationHistoryField("结束时间", "${item.endDate} ${item.endTime}")
+            if (onCancel != null) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isCancelling
+                ) {
+                    Text(if (isCancelling) "取消中..." else "取消预约")
+                }
+            }
         }
     }
 }

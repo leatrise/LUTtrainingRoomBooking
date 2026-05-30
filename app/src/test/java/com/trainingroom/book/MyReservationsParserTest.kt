@@ -62,20 +62,12 @@ class MyReservationsParserTest {
     }
 
     @Test
-    fun `parse current reservation page extracts javascript lists`() {
+    fun `parse current reservation page extracts multi room javascript list`() {
         val html = """
             <html>
             <body>
             <a href="trainingroombeskinfor">我的研讨间预约</a>
             <script type="text/javascript">
-              var oneroombesklist = [{
-                "begintime":"09:00:00",
-                "committime":"2026-04-04 08:10:00.000",
-                "endtime":"10:00:00",
-                "id":"one-1",
-                "roomname":"研讨室A101",
-                "useday":"2026-04-05"
-              }];
               var moreroombesklist = [{
                 "begintime":"14:18:37",
                 "committime":"2026-04-04 15:21:59.533",
@@ -94,12 +86,11 @@ class MyReservationsParserTest {
 
         val items = parseMyCurrentTrainingReservations(html)
 
-        assertEquals(2, items.size)
-        assertEquals("单人预约", items[0].status)
-        assertEquals("研讨室A101", items[0].roomName)
-        assertEquals("2026-04-05", items[0].endDate)
-        assertEquals("已审核", items[1].status)
-        assertEquals("2026-04-04 15:21", items[1].createdAt)
-        assertEquals("研讨室A520", items[1].roomName)
+        assertEquals(1, items.size)
+        assertEquals("已审核", items[0].status)
+        assertEquals("1515122", items[0].id)
+        assertEquals(MyTrainingReservationCancelType.MULTI, items[0].cancelType)
+        assertEquals("2026-04-04 15:21", items[0].createdAt)
+        assertEquals("研讨室A520", items[0].roomName)
     }
 }
